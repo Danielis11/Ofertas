@@ -4,3 +4,4 @@ packages:
   - 'services/*'
 allowBuilds:
   '@nestjs/core': true
+  '@scarf/scarf': true
