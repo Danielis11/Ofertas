@@ -1,0 +1,192 @@
+﻿import React, { useEffect, useState } from 'react';
+import { X, TrendingDown, ArrowUpRight, ArrowDownRight, ShieldCheck, Bell } from 'lucide-react';
+import { DealScore, PricePoint, PriceStatistics, api } from '../lib/api';
+
+interface Props {
+  deal: DealScore | null;
+  onClose: () => void;
+  onOpenAlert: (deal: DealScore) => void;
+}
+
+export const PriceHistoryModal: React.FC<Props> = ({ deal, onClose, onOpenAlert }) => {
+  const [history, setHistory] = useState<PricePoint[]>([]);
+  const [stats, setStats] = useState<PriceStatistics | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!deal) return;
+    setLoading(true);
+
+    Promise.all([
+      api.getPriceHistory(deal.offer.id).catch(() => []),
+      api.getPriceStatistics(deal.offer.id).catch(() => null),
+    ]).then(([historyData, statsData]) => {
+      setHistory(historyData);
+      setStats(statsData);
+      setLoading(false);
+    });
+  }, [deal]);
+
+  if (!deal) return null;
+
+  const { offer } = deal;
+  const product = offer.product;
+
+  const formatPrice = (val?: number) => {
+    if (val === undefined || val === null) return 'N/A';
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: offer.currency || 'MXN',
+      maximumFractionDigits: 0,
+    }).format(val);
+  };
+
+  // SVG Chart points calculation
+  const chartPoints = history.length > 0 ? history : [{ id: '1', price: Number(offer.price), recordedAt: new Date().toISOString() }];
+  const prices = chartPoints.map((p) => Number(p.price));
+  const minP = Math.min(...prices) * 0.95;
+  const maxP = Math.max(...prices) * 1.05;
+  const range = maxP - minP || 1;
+
+  const width = 500;
+  const height = 180;
+  const padding = 20;
+
+  const coordinates = chartPoints.map((pt, idx) => {
+    const x = padding + (idx / Math.max(1, chartPoints.length - 1)) * (width - padding * 2);
+    const y = height - padding - ((Number(pt.price) - minP) / range) * (height - padding * 2);
+    return { x, y, price: Number(pt.price), date: new Date(pt.recordedAt).toLocaleDateString('es-MX') };
+  });
+
+  const pathD = coordinates.reduce((acc, pt, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '');
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto">
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Header */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-orange-100 text-orange-700">
+              {offer.store?.name}
+            </span>
+            {product?.brand && <span className="text-xs text-slate-400 font-medium">{product.brand}</span>}
+          </div>
+          <h2 className="text-lg font-bold text-slate-900 line-clamp-1">{product?.name}</h2>
+          <div className="flex items-baseline gap-3 mt-1">
+            <span className="text-2xl font-black text-slate-900">{formatPrice(Number(offer.price))}</span>
+            <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+              Deal Score: {deal.score}/100 ({deal.grade.replace('_', ' ')})
+            </span>
+          </div>
+        </div>
+
+        {/* Key Statistics */}
+        <div className="grid grid-cols-4 gap-3 my-4">
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <span className="text-[11px] text-slate-500 font-medium block">Mínimo Histórico</span>
+            <span className="text-sm font-bold text-emerald-600 flex items-center gap-0.5 mt-0.5">
+              <ArrowDownRight className="w-4 h-4" />
+              {formatPrice(stats?.minPrice || Number(offer.price))}
+            </span>
+          </div>
+
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <span className="text-[11px] text-slate-500 font-medium block">Precio Promedio</span>
+            <span className="text-sm font-bold text-slate-700 block mt-0.5">
+              {formatPrice(stats?.avgPrice || Number(offer.price))}
+            </span>
+          </div>
+
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <span className="text-[11px] text-slate-500 font-medium block">Precio Máximo</span>
+            <span className="text-sm font-bold text-rose-500 flex items-center gap-0.5 mt-0.5">
+              <ArrowUpRight className="w-4 h-4" />
+              {formatPrice(stats?.maxPrice || Number(offer.price))}
+            </span>
+          </div>
+
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <span className="text-[11px] text-slate-500 font-medium block">Bajadas Registradas</span>
+            <span className="text-sm font-bold text-orange-600 block mt-0.5">
+              {stats?.priceDropsCount ?? 1} veces
+            </span>
+          </div>
+        </div>
+
+        {/* Price History Chart */}
+        <div className="my-4 bg-slate-950 rounded-2xl p-4 text-white">
+          <div className="flex justify-between items-center mb-3">
+            <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <TrendingDown className="w-4 h-4 text-orange-400" />
+              <span>Fluctuación Histórica de Precios</span>
+            </div>
+            <span className="text-[11px] text-slate-400">{chartPoints.length} puntos de datos</span>
+          </div>
+
+          {loading ? (
+            <div className="h-44 flex items-center justify-center text-slate-400 text-xs">
+              Cargando historial...
+            </div>
+          ) : (
+            <div className="relative">
+              <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-44 overflow-visible">
+                {/* Horizontal Guide lines */}
+                <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="#334155" strokeDasharray="3 3" />
+                <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="#334155" strokeDasharray="3 3" />
+                <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#334155" strokeDasharray="3 3" />
+
+                {/* Line Path */}
+                <path d={pathD} fill="none" stroke="#f97316" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+
+                {/* Points */}
+                {coordinates.map((pt, i) => (
+                  <circle key={i} cx={pt.x} cy={pt.y} r="4" fill="#f97316" stroke="#ffffff" strokeWidth="2" />
+                ))}
+              </svg>
+
+              <div className="flex justify-between text-[10px] text-slate-400 mt-1 px-2">
+                <span>{coordinates[0]?.date || 'Inicio'}</span>
+                <span>{coordinates[coordinates.length - 1]?.date || 'Hoy'}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+          <div className="text-xs text-slate-500 flex items-center gap-1">
+            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+            <span>Verificado algorítmicamente por DealHunter Engine</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onOpenAlert(deal)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 text-white font-semibold text-xs hover:bg-amber-600 transition-colors shadow-sm"
+            >
+              <Bell className="w-4 h-4" />
+              <span>Crear Alerta de Precio</span>
+            </button>
+
+            <a
+              href={offer.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 rounded-xl bg-orange-600 text-white font-semibold text-xs hover:bg-orange-700 transition-colors shadow-sm"
+            >
+              Ir a Oferta
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
