@@ -18,6 +18,7 @@ DEFAULT_REQUEST_HEADERS = {
 
 ITEM_PIPELINES = {
     "dealhunter_scraper.pipelines.ValidationPipeline": 300,
+    "dealhunter_scraper.pipelines.RabbitMQPipeline": 700,
     "dealhunter_scraper.pipelines.ApiPublisherPipeline": 800,
 }
 
