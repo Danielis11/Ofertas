@@ -3,12 +3,14 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { AlertsService } from './alerts.service';
 import { PriceAlert, AlertStatus } from './entities/price-alert.entity';
 import { ProductsService } from '../products/products.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('AlertsService', () => {
   let service: AlertsService;
   let mockAlertRepo: any;
   let mockProductsService: any;
+  let mockNotifService: any;
 
   const sampleAlert = {
     id: 'alert-1',
@@ -32,11 +34,16 @@ describe('AlertsService', () => {
       findById: jest.fn().mockResolvedValue({ id: 'prod-1', name: 'Test Product' }),
     };
 
+    mockNotifService = {
+      send: jest.fn().mockResolvedValue({ id: 'notif-1' }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AlertsService,
         { provide: getRepositoryToken(PriceAlert), useValue: mockAlertRepo },
         { provide: ProductsService, useValue: mockProductsService },
+        { provide: NotificationsService, useValue: mockNotifService },
       ],
     }).compile();
 

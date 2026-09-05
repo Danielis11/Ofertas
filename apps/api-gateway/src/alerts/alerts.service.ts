@@ -4,6 +4,8 @@ import { Repository } from 'typeorm';
 import { PriceAlert, AlertStatus } from './entities/price-alert.entity';
 import { CreatePriceAlertDto } from './dto/create-alert.dto';
 import { ProductsService } from '../products/products.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationChannel } from '../notifications/entities/notification.entity';
 
 @Injectable()
 export class AlertsService {
@@ -13,6 +15,7 @@ export class AlertsService {
     @InjectRepository(PriceAlert)
     private readonly alertRepo: Repository<PriceAlert>,
     private readonly productsService: ProductsService,
+    private readonly notifService: NotificationsService,
   ) {}
 
   async create(userId: string, dto: CreatePriceAlertDto): Promise<PriceAlert> {
@@ -64,6 +67,20 @@ export class AlertsService {
         await this.alertRepo.save(alert);
         triggered.push(alert);
         this.logger.log(`[ALERT TRIGGERED] User ${alert.user?.email || alert.userId} notified for product ${alert.productId}: Target was $${alert.targetPrice}, now $${newPrice}`);
+
+        // Dispatch real-time notification
+        await this.notifService.send({
+          userId: alert.userId,
+          title: `¡Alerta de Precio Activada!`,
+          message: `El producto "${alert.product?.name || 'que sigues'}" ha bajado a $${newPrice} ${alert.currency} (tu meta era $${alert.targetPrice}).`,
+          channel: NotificationChannel.IN_APP,
+          data: {
+            alertId: alert.id,
+            productId: alert.productId,
+            targetPrice: alert.targetPrice,
+            currentPrice: newPrice,
+          },
+        });
       }
     }
 
