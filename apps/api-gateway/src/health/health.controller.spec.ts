@@ -23,4 +23,19 @@ describe('HealthController', () => {
       service: 'api-gateway',
     });
   });
+
+  it('should return system audit summary', async () => {
+    const audit = await controller.getSystemAudit();
+    expect(audit).toBeDefined();
+    expect(audit.status).toBe('healthy');
+    expect(audit.uptimeSeconds).toBeGreaterThanOrEqual(0);
+    expect(audit.version).toBe('1.0.0');
+    expect(audit.memory).toBeDefined();
+    expect(audit.infrastructure).toBeDefined();
+    expect(audit.infrastructure.database).toBeDefined();
+    expect(audit.infrastructure.redis).toBeDefined();
+    expect(audit.infrastructure.rabbitmq).toBeDefined();
+    expect(audit.infrastructure.websockets).toBeDefined();
+  });
 });
+

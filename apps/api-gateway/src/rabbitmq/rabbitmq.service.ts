@@ -54,6 +54,10 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  isConnected(): boolean {
+    return !!this.connection && !!this.channel;
+  }
+
   private async connect(): Promise<void> {
     const host = this.configService.get<string>('RABBITMQ_HOST', 'localhost');
     const port = this.configService.get<number>('RABBITMQ_PORT', 5672);

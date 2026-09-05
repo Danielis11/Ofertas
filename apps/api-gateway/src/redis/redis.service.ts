@@ -79,4 +79,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.logger.error(`Redis delByPattern error for pattern '${pattern}': ${err.message}`);
     }
   }
+
+  async ping(): Promise<boolean> {
+    try {
+      if (!this.client) return false;
+      const res = await this.client.ping();
+      return res === 'PONG';
+    } catch {
+      return false;
+    }
+  }
 }
+
