@@ -1,0 +1,126 @@
+﻿services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dealhunter-prod-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dealhunter}
+      POSTGRES_USER: ${POSTGRES_USER:-dealhunter_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dealhunter_password}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dealhunter_user} -d ${POSTGRES_DB:-dealhunter}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dealhunter-prod-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: dealhunter-prod-redis
+    restart: always
+    volumes:
+      - redis_prod_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dealhunter-prod-net
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: dealhunter-prod-rabbitmq
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-dealhunter_admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-dealhunter_admin_pass}
+    volumes:
+      - rabbitmq_prod_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dealhunter-prod-net
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: dealhunter-prod-api
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-dealhunter_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dealhunter_password}
+      POSTGRES_DB: ${POSTGRES_DB:-dealhunter}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-dealhunter_admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-dealhunter_admin_pass}
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key_dealhunter_2026}
+      JWT_EXPIRES_IN: 1d
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    networks:
+      - dealhunter-prod-net
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    container_name: dealhunter-prod-web
+    restart: always
+    depends_on:
+      - api-gateway
+    ports:
+      - "80:80"
+    networks:
+      - dealhunter-prod-net
+
+  scraper-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.scraper
+    container_name: dealhunter-prod-scraper
+    restart: always
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-dealhunter_admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-dealhunter_admin_pass}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - dealhunter-prod-net
+
+networks:
+  dealhunter-prod-net:
+    name: dealhunter_prod_network
+    driver: bridge
+
+volumes:
+  postgres_prod_data:
+    name: dealhunter_prod_postgres_data
+  redis_prod_data:
+    name: dealhunter_prod_redis_data
+  rabbitmq_prod_data:
+    name: dealhunter_prod_rabbitmq_data

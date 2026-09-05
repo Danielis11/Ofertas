@@ -1,0 +1,48 @@
+﻿# Multi-stage Dockerfile for NestJS API Gateway
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Enable Corepack & pnpm
+RUN corepack enable && corepack prepare pnpm@11.1.2 --activate
+
+# Copy root workspace configs
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+
+# Copy packages and app source
+COPY packages/ packages/
+COPY apps/api-gateway/ apps/api-gateway/
+
+# Install all dependencies
+RUN pnpm install --frozen-lockfile
+
+# Build shared-events and api-gateway
+RUN pnpm --filter @dealhunter/shared-events build
+RUN pnpm --filter @dealhunter/api-gateway build
+
+# Production Runner Stage
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
+# Copy runtime files from builder
+COPY --from=builder /app/package.json /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/apps/api-gateway/dist ./apps/api-gateway/dist
+COPY --from=builder /app/apps/api-gateway/node_modules ./apps/api-gateway/node_modules
+COPY --from=builder /app/apps/api-gateway/package.json ./apps/api-gateway/package.json
+
+USER node
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
+  CMD curl -f http://localhost:3000/api/v1/health || exit 1
+
+CMD ["node", "apps/api-gateway/dist/main.js"]

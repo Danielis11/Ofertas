@@ -1,0 +1,33 @@
+﻿# Dockerfile for Python Scrapy Worker & Task Consumer
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Set Python environment flags
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Install system runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libxml2-dev \
+    libxslt1-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python requirements
+COPY services/scraper/requirements.txt ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy Scraper project
+COPY services/scraper/ ./
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD python -c "import pika; print('Scraper healthy')" || exit 1
+
+CMD ["python", "-u", "dealhunter_scraper/task_consumer.py"]
