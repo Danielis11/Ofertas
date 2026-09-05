@@ -5,6 +5,8 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { HealthModule } from './health/health.module';
 import { ProductsModule } from './products/products.module';
+import { StoresModule } from './stores/stores.module';
+import { OffersModule } from './offers/offers.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
@@ -41,6 +43,8 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     }),
     HealthModule,
     ProductsModule,
+    StoresModule,
+    OffersModule,
   ],
   providers: [
     {
