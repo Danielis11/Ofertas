@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { HealthModule } from './health/health.module';
+import { ProductsModule } from './products/products.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
@@ -11,6 +13,21 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '../../.env'],
+    }),
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        type: 'postgres',
+        host: config.get<string>('POSTGRES_HOST', 'localhost'),
+        port: Number(config.get<number>('POSTGRES_PORT', 5433)),
+        username: config.get<string>('POSTGRES_USER', 'dealhunter_user'),
+        password: config.get<string>('POSTGRES_PASSWORD', 'dealhunter_password'),
+        database: config.get<string>('POSTGRES_DB', 'dealhunter'),
+        autoLoadEntities: true,
+        synchronize: config.get<string>('NODE_ENV') !== 'production',
+        logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn', 'schema'] : false,
+      }),
     }),
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
@@ -23,6 +40,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
       ],
     }),
     HealthModule,
+    ProductsModule,
   ],
   providers: [
     {
