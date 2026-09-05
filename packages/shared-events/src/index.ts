@@ -8,6 +8,7 @@ export enum DealHunterEvents {
   ALERT_CREATED = 'ALERT_CREATED',
   ALERT_TRIGGERED = 'ALERT_TRIGGERED',
   NOTIFICATION_REQUESTED = 'NOTIFICATION_REQUESTED',
+  SCRAPE_TASK_REQUESTED = 'SCRAPE_TASK_REQUESTED',
 }
 
 export interface BaseEvent<T = any> {
@@ -57,6 +58,17 @@ export interface DealDetectedPayload {
   currency: string;
 }
 
+export interface ScrapeTaskPayload {
+  storeSlug: string;
+  category?: string;
+  searchQuery?: string;
+  urls?: string[];
+  priority?: 'HIGH' | 'NORMAL' | 'LOW';
+  maxItems?: number;
+  triggeredBy: 'CRON' | 'MANUAL';
+  dispatchedAt: string;
+}
+
 export const RABBITMQ_EXCHANGES = {
   EVENTS: 'dealhunter.events',
 };
@@ -67,10 +79,12 @@ export const RABBITMQ_ROUTING_KEYS = {
   PRICE_DROPPED: 'price.dropped',
   DEAL_DETECTED: 'deal.detected',
   ALERT_TRIGGERED: 'alert.triggered',
+  SCRAPE_TASK: 'scraper.task.dispatch',
 };
 
 export const RABBITMQ_QUEUES = {
   SCRAPER_OFFERS: 'dealhunter.queue.scraper_offers',
   PRICE_UPDATES: 'dealhunter.queue.price_updates',
   DEAL_ANALYSIS: 'dealhunter.queue.deal_analysis',
+  SCRAPER_TASKS: 'dealhunter.queue.scraper_tasks',
 };

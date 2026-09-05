@@ -16,6 +16,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { RabbitMQModule } from './rabbitmq/rabbitmq.module';
 import { RedisModule } from './redis/redis.module';
 import { SearchModule } from './search/search.module';
+import { ScraperDispatcherModule } from './scraper-dispatcher/scraper-dispatcher.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
@@ -63,6 +64,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     NotificationsModule,
     RabbitMQModule,
     SearchModule,
+    ScraperDispatcherModule,
   ],
   providers: [
     {
