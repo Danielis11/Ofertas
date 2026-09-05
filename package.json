@@ -1,0 +1,33 @@
+{
+  "name": "dealhunter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DealHunter - Smart Deal & Price Tracker Platform",
+  "scripts": {
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "infra:logs": "docker compose logs -f",
+    "infra:status": "docker compose ps",
+    "gateway:dev": "pnpm --filter @dealhunter/api-gateway run start:dev",
+    "gateway:build": "pnpm --filter @dealhunter/api-gateway run build",
+    "gateway:start": "pnpm --filter @dealhunter/api-gateway run start:prod",
+    "gateway:test": "pnpm --filter @dealhunter/api-gateway run test",
+    "gateway:test:e2e": "pnpm --filter @dealhunter/api-gateway run test:e2e"
+  },
+  "keywords": [
+    "dealhunter",
+    "price-tracker",
+    "deals",
+    "microservices",
+    "nestjs",
+    "pnpm"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@11.1.2",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core"
+    ]
+  }
+}
