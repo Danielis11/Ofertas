@@ -76,6 +76,16 @@ export class OffersService {
     return offer;
   }
 
+  async findAll(options?: { limit?: number }): Promise<{ data: Offer[]; total: number }> {
+    const limit = options?.limit || 50;
+    const [data, total] = await this.offerRepo.findAndCount({
+      relations: { store: true, product: true },
+      take: limit,
+      order: { updatedAt: 'DESC' },
+    });
+    return { data, total };
+  }
+
   async remove(id: string): Promise<void> {
     const offer = await this.findById(id);
     await this.offerRepo.remove(offer);

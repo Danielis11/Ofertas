@@ -8,6 +8,7 @@ import { ProductsModule } from './products/products.module';
 import { StoresModule } from './stores/stores.module';
 import { OffersModule } from './offers/offers.module';
 import { PricesModule } from './prices/prices.module';
+import { DealsModule } from './deals/deals.module';
 import { RabbitMQModule } from './rabbitmq/rabbitmq.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -48,6 +49,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     StoresModule,
     OffersModule,
     PricesModule,
+    DealsModule,
     RabbitMQModule,
   ],
   providers: [
