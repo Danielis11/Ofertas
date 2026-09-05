@@ -12,7 +12,9 @@
     "gateway:build": "pnpm --filter @dealhunter/api-gateway run build",
     "gateway:start": "pnpm --filter @dealhunter/api-gateway run start:prod",
     "gateway:test": "pnpm --filter @dealhunter/api-gateway run test",
-    "gateway:test:e2e": "pnpm --filter @dealhunter/api-gateway run test:e2e"
+    "gateway:test:e2e": "pnpm --filter @dealhunter/api-gateway run test:e2e",
+    "scraper:test": ".\\services\\scraper\\.venv\\Scripts\\pytest.exe services/scraper",
+    "scraper:list": ".\\services\\scraper\\.venv\\Scripts\\scrapy.exe --project dealhunter_scraper list"
   },
   "keywords": [
     "dealhunter",
