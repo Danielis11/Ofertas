@@ -19,6 +19,7 @@ import { OffersService } from '../offers/offers.service';
 import { ProductsService } from '../products/products.service';
 import { StoresService } from '../stores/stores.service';
 import { PricesService } from '../prices/prices.service';
+import { AlertsService } from '../alerts/alerts.service';
 import { IdentifierType } from '../products/entities/product-identifier.entity';
 
 @Injectable()
@@ -33,6 +34,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     private readonly productsService: ProductsService,
     private readonly storesService: StoresService,
     private readonly pricesService: PricesService,
+    private readonly alertsService: AlertsService,
   ) {}
 
   async onModuleInit() {
@@ -226,6 +228,11 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
 
       const routingKey = diff < 0 ? RABBITMQ_ROUTING_KEYS.PRICE_DROPPED : RABBITMQ_ROUTING_KEYS.PRICE_CHANGED;
       await this.publishEvent(routingKey, priceChangedEvent);
+
+      // Check user alerts if price dropped
+      if (diff < 0) {
+        await this.alertsService.checkAlertsForProductPrice(product.id, payload.price);
+      }
     }
   }
 }

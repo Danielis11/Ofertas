@@ -11,6 +11,7 @@ import { PricesModule } from './prices/prices.module';
 import { DealsModule } from './deals/deals.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { AlertsModule } from './alerts/alerts.module';
 import { RabbitMQModule } from './rabbitmq/rabbitmq.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -54,6 +55,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     DealsModule,
     UsersModule,
     AuthModule,
+    AlertsModule,
     RabbitMQModule,
   ],
   providers: [
