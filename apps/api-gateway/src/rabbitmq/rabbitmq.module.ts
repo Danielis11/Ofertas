@@ -3,9 +3,10 @@ import { RabbitMQService } from './rabbitmq.service';
 import { OffersModule } from '../offers/offers.module';
 import { ProductsModule } from '../products/products.module';
 import { StoresModule } from '../stores/stores.module';
+import { PricesModule } from '../prices/prices.module';
 
 @Module({
-  imports: [OffersModule, ProductsModule, StoresModule],
+  imports: [OffersModule, ProductsModule, StoresModule, PricesModule],
   providers: [RabbitMQService],
   exports: [RabbitMQService],
 })

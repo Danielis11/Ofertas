@@ -4,12 +4,14 @@ import { RabbitMQService } from './rabbitmq.service';
 import { OffersService } from '../offers/offers.service';
 import { ProductsService } from '../products/products.service';
 import { StoresService } from '../stores/stores.service';
+import { PricesService } from '../prices/prices.service';
 
 describe('RabbitMQService', () => {
   let service: RabbitMQService;
   let mockOffersService: any;
   let mockProductsService: any;
   let mockStoresService: any;
+  let mockPricesService: any;
 
   beforeEach(async () => {
     mockOffersService = {
@@ -24,6 +26,11 @@ describe('RabbitMQService', () => {
     mockStoresService = {
       findBySlug: jest.fn(),
     };
+    mockPricesService = {
+      recordPrice: jest.fn().mockResolvedValue({}),
+      getHistoryByOffer: jest.fn(),
+      getOfferStatistics: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -37,6 +44,7 @@ describe('RabbitMQService', () => {
         { provide: OffersService, useValue: mockOffersService },
         { provide: ProductsService, useValue: mockProductsService },
         { provide: StoresService, useValue: mockStoresService },
+        { provide: PricesService, useValue: mockPricesService },
       ],
     }).compile();
 

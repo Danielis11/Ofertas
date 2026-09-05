@@ -18,6 +18,7 @@ import {
 import { OffersService } from '../offers/offers.service';
 import { ProductsService } from '../products/products.service';
 import { StoresService } from '../stores/stores.service';
+import { PricesService } from '../prices/prices.service';
 import { IdentifierType } from '../products/entities/product-identifier.entity';
 
 @Injectable()
@@ -31,6 +32,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     private readonly offersService: OffersService,
     private readonly productsService: ProductsService,
     private readonly storesService: StoresService,
+    private readonly pricesService: PricesService,
   ) {}
 
   async onModuleInit() {
@@ -144,9 +146,11 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     let product = null;
     if (payload.identifiers) {
       for (const [key, val] of Object.entries(payload.identifiers)) {
-        const idType = key as IdentifierType;
-        product = await this.productsService.findByIdentifier(idType, String(val));
-        if (product) break;
+        const idType = key.toUpperCase() as IdentifierType;
+        if (Object.values(IdentifierType).includes(idType)) {
+          product = await this.productsService.findByIdentifier(idType, String(val));
+          if (product) break;
+        }
       }
     }
 
@@ -167,7 +171,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
         image: payload.imageUrl,
         identifiers: payload.identifiers
           ? Object.entries(payload.identifiers).map(([k, v]) => ({
-              type: k as IdentifierType,
+              type: (k.toUpperCase() as IdentifierType),
               value: String(v),
             }))
           : undefined,
@@ -191,7 +195,13 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
       availability: payload.availability,
     });
 
-    // 5. Emit PRICE_CHANGED event if price differed
+    // 5. Record price in history if it's a new offer or price has changed
+    if (oldPrice === null || oldPrice !== payload.price) {
+      await this.pricesService.recordPrice(savedOffer.id, payload.price, payload.currency || 'MXN');
+      this.logger.log(`Recorded price entry: Offer ${savedOffer.id} -> $${payload.price}`);
+    }
+
+    // 6. Emit PRICE_CHANGED event if price differed
     if (oldPrice !== null && oldPrice !== payload.price) {
       const diff = payload.price - oldPrice;
       const pct = (diff / oldPrice) * 100;
