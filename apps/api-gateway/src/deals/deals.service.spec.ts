@@ -1,7 +1,8 @@
-﻿import { Test, TestingModule } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import { DealsService } from './deals.service';
 import { OffersService } from '../offers/offers.service';
 import { PricesService } from '../prices/prices.service';
+import { RedisService } from '../redis/redis.service';
 import { DealGrade } from './interfaces/deal-score.interface';
 import { NotFoundException } from '@nestjs/common';
 
@@ -9,6 +10,7 @@ describe('DealsService', () => {
   let service: DealsService;
   let mockOffersService: any;
   let mockPricesService: any;
+  let mockRedisService: any;
 
   const sampleOffer = {
     id: 'offer-1',
@@ -44,11 +46,19 @@ describe('DealsService', () => {
       }),
     };
 
+    mockRedisService = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue(undefined),
+      del: jest.fn().mockResolvedValue(undefined),
+      delByPattern: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DealsService,
         { provide: OffersService, useValue: mockOffersService },
         { provide: PricesService, useValue: mockPricesService },
+        { provide: RedisService, useValue: mockRedisService },
       ],
     }).compile();
 

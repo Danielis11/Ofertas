@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { OffersService } from '../offers/offers.service';
 import { PricesService } from '../prices/prices.service';
+import { RedisService } from '../redis/redis.service';
 import { DealGrade, DealScoreResult } from './interfaces/deal-score.interface';
 import { DealScoreDto } from './dto/deal-score.dto';
 
@@ -9,6 +10,7 @@ export class DealsService {
   constructor(
     private readonly offersService: OffersService,
     private readonly pricesService: PricesService,
+    private readonly redisService: RedisService,
   ) {}
 
   /**
@@ -21,6 +23,12 @@ export class DealsService {
    * 4. Cross-store competitiveness advantage (0 - 15 pts)
    */
   async evaluateOffer(offerId: string): Promise<DealScoreDto> {
+    const cacheKey = `deals:offer:${offerId}`;
+    const cached = await this.redisService.get<DealScoreDto>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const offer = await this.offersService.findById(offerId);
     if (!offer) {
       throw new NotFoundException(`Offer with ID "${offerId}" not found`);
@@ -94,7 +102,7 @@ export class DealsService {
 
     const savingsPercentage = Number(avgDiscountPct.toFixed(2));
 
-    return {
+    const result: DealScoreDto = {
       score,
       grade,
       savingsPercentage,
@@ -106,12 +114,23 @@ export class DealsService {
       },
       offer,
     };
+
+    // Cache deal evaluation for 5 minutes
+    await this.redisService.set(cacheKey, result, 300);
+
+    return result;
   }
 
   /**
    * Find top scored deals across all products with minScore filter
    */
   async getTopDeals(minScore: number = 70, limit: number = 20): Promise<DealScoreDto[]> {
+    const cacheKey = `deals:top:${minScore}:${limit}`;
+    const cached = await this.redisService.get<DealScoreDto[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     // Evaluate offers that are currently available
     const activeOffers = await this.offersService.findAll({ limit: 100 });
     const scoredDeals: DealScoreDto[] = [];
@@ -130,6 +149,11 @@ export class DealsService {
 
     // Sort descending by score
     scoredDeals.sort((a, b) => b.score - a.score);
-    return scoredDeals.slice(0, limit);
+    const topDeals = scoredDeals.slice(0, limit);
+
+    // Cache top deals for 2 minutes
+    await this.redisService.set(cacheKey, topDeals, 120);
+
+    return topDeals;
   }
 }

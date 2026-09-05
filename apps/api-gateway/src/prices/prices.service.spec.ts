@@ -1,8 +1,9 @@
-﻿import { Test, TestingModule } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { PricesService } from './prices.service';
 import { PriceHistory } from './entities/price-history.entity';
 import { Offer } from '../offers/entities/offer.entity';
+import { RedisService } from '../redis/redis.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('PricesService', () => {
@@ -37,11 +38,19 @@ describe('PricesService', () => {
       findOne: jest.fn().mockResolvedValue(mockOffer),
     };
 
+    const mockRedisService = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue(undefined),
+      del: jest.fn().mockResolvedValue(undefined),
+      delByPattern: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PricesService,
         { provide: getRepositoryToken(PriceHistory), useValue: priceHistoryRepo },
         { provide: getRepositoryToken(Offer), useValue: offerRepo },
+        { provide: RedisService, useValue: mockRedisService },
       ],
     }).compile();
 
