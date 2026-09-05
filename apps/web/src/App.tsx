@@ -1,10 +1,12 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
 import { DealsExplorer } from './components/DealsExplorer';
 import { PriceHistoryModal } from './components/PriceHistoryModal';
 import { AlertModal } from './components/AlertModal';
 import { DispatcherModal } from './components/DispatcherModal';
+import { LiveDealToast } from './components/LiveDealToast';
+import { useLiveDeals } from './lib/useLiveDeals';
 import { DealScore } from './lib/api';
 import { Flame, ShieldCheck, Zap } from 'lucide-react';
 
@@ -15,6 +17,9 @@ export default function App() {
   const [activeAlertDeal, setActiveAlertDeal] = useState<DealScore | null>(null);
   const [isDispatcherOpen, setIsDispatcherOpen] = useState(false);
 
+  // WebSocket Live Stream Hook
+  const { isConnected, latestLiveEvent, dismissEvent } = useLiveDeals();
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       {/* Navigation */}
@@ -24,6 +29,7 @@ export default function App() {
         selectedStore={selectedStore}
         onSelectStore={setSelectedStore}
         onOpenDispatcher={() => setIsDispatcherOpen(true)}
+        isConnected={isConnected}
       />
 
       {/* Hero Banner */}
@@ -55,6 +61,12 @@ export default function App() {
       <DispatcherModal
         isOpen={isDispatcherOpen}
         onClose={() => setIsDispatcherOpen(false)}
+      />
+
+      {/* Floating Live Deal Alert */}
+      <LiveDealToast
+        event={latestLiveEvent}
+        onDismiss={dismissEvent}
       />
 
       {/* Footer */}

@@ -21,6 +21,8 @@ import { StoresService } from '../stores/stores.service';
 import { PricesService } from '../prices/prices.service';
 import { AlertsService } from '../alerts/alerts.service';
 import { IdentifierType } from '../products/entities/product-identifier.entity';
+import { Optional } from '@nestjs/common';
+import { EventsGateway } from '../websocket/events.gateway';
 
 @Injectable()
 export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
@@ -35,6 +37,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     private readonly storesService: StoresService,
     private readonly pricesService: PricesService,
     private readonly alertsService: AlertsService,
+    @Optional() private readonly eventsGateway?: EventsGateway,
   ) {}
 
   async onModuleInit() {
@@ -228,6 +231,12 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
 
       const routingKey = diff < 0 ? RABBITMQ_ROUTING_KEYS.PRICE_DROPPED : RABBITMQ_ROUTING_KEYS.PRICE_CHANGED;
       await this.publishEvent(routingKey, priceChangedEvent);
+
+      if (this.eventsGateway) {
+        if (diff < 0) {
+          this.eventsGateway.broadcastPriceDrop(priceChangedEvent.payload);
+        }
+      }
 
       // Check user alerts if price dropped
       if (diff < 0) {

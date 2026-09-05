@@ -17,6 +17,7 @@ import { RabbitMQModule } from './rabbitmq/rabbitmq.module';
 import { RedisModule } from './redis/redis.module';
 import { SearchModule } from './search/search.module';
 import { ScraperDispatcherModule } from './scraper-dispatcher/scraper-dispatcher.module';
+import { WebsocketModule } from './websocket/websocket.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
@@ -65,6 +66,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     RabbitMQModule,
     SearchModule,
     ScraperDispatcherModule,
+    WebsocketModule,
   ],
   providers: [
     {

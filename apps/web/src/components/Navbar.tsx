@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Flame, Bell, Cpu, ArrowRight, Store } from 'lucide-react';
 import { api, SuggestionsResponse } from '../lib/api';
 
@@ -8,6 +8,7 @@ interface Props {
   onOpenDispatcher: () => void;
   selectedStore: string;
   onSelectStore: (slug: string) => void;
+  isConnected?: boolean;
 }
 
 export const Navbar: React.FC<Props> = ({
@@ -16,6 +17,7 @@ export const Navbar: React.FC<Props> = ({
   onOpenDispatcher,
   selectedStore,
   onSelectStore,
+  isConnected = false,
 }) => {
   const [inputValue, setInputValue] = useState(searchQuery);
   const [suggestions, setSuggestions] = useState<SuggestionsResponse>({ products: [], brands: [], categories: [] });
@@ -141,6 +143,11 @@ export const Navbar: React.FC<Props> = ({
 
           {/* Actions & Tools */}
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
+              <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+              <span className="hidden sm:inline">{isConnected ? 'En Vivo' : 'Desconectado'}</span>
+            </div>
+
             <button
               onClick={onOpenDispatcher}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition-colors"
