@@ -1,4 +1,4 @@
-﻿const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
 
 export interface DealFactor {
   discountFromAverage: number;
@@ -97,6 +97,25 @@ export interface ScraperStatus {
   lastDispatchedAt?: string;
 }
 
+export interface FakeDiscountAnalysis {
+  isInflatedOriginalPrice: boolean;
+  genuineSavingsPercentage: number;
+  advertisedSavingsPercentage: number;
+  confidence: 'GENUINE_DEAL' | 'VERIFIED_DROP' | 'SUSPECTED_INFLATION';
+  explanation: string;
+}
+
+export interface PricePrediction {
+  offerId: string;
+  currentPrice: number;
+  trend: 'UPWARD' | 'DOWNWARD' | 'STABLE';
+  predictedNextPrice: number;
+  confidenceScore: number;
+  recommendation: 'BUY_NOW' | 'WAIT' | 'FAIR_PRICE' | 'OVERPRICED';
+  recommendationReason: string;
+  fakeDiscountAnalysis: FakeDiscountAnalysis;
+}
+
 export const api = {
   // Deals & Search
   async searchDeals(params: Record<string, any> = {}): Promise<SearchResponse> {
@@ -150,6 +169,15 @@ export const api = {
     return res.json();
   },
 
+  // Deal Intelligence & Prediction
+  async getPrediction(offerId: string): Promise<PricePrediction> {
+    const res = await fetch(`${API_BASE_URL}/intelligence/prediction/${offerId}`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`Failed to fetch prediction`);
+    return res.json();
+  },
+
   // Alerts
   async createAlert(token: string, data: { productId: string; targetPrice: number; notifyChannels?: string[] }) {
     const res = await fetch(`${API_BASE_URL}/alerts`, {
@@ -181,3 +209,4 @@ export const api = {
     return res.json();
   },
 };
+

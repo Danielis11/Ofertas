@@ -1,5 +1,6 @@
 packages:
-  - 'apps/*'
+  - 'apps/api-gateway'
+  - 'apps/web'
   - 'packages/*'
   - 'services/*'
 allowBuilds:

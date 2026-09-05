@@ -18,6 +18,7 @@ import { RedisModule } from './redis/redis.module';
 import { SearchModule } from './search/search.module';
 import { ScraperDispatcherModule } from './scraper-dispatcher/scraper-dispatcher.module';
 import { WebsocketModule } from './websocket/websocket.module';
+import { IntelligenceModule } from './intelligence/intelligence.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
@@ -67,6 +68,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     SearchModule,
     ScraperDispatcherModule,
     WebsocketModule,
+    IntelligenceModule,
   ],
   providers: [
     {

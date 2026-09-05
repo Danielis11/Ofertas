@@ -1,6 +1,18 @@
-﻿import React, { useEffect, useState } from 'react';
-import { X, TrendingDown, ArrowUpRight, ArrowDownRight, ShieldCheck, Bell } from 'lucide-react';
-import { DealScore, PricePoint, PriceStatistics, api } from '../lib/api';
+import React, { useEffect, useState } from 'react';
+import {
+  X,
+  TrendingDown,
+  TrendingUp,
+  Minus,
+  ArrowUpRight,
+  ArrowDownRight,
+  ShieldCheck,
+  ShieldAlert,
+  Bell,
+  Sparkles,
+  AlertTriangle,
+} from 'lucide-react';
+import { DealScore, PricePoint, PriceStatistics, PricePrediction, api } from '../lib/api';
 
 interface Props {
   deal: DealScore | null;
@@ -11,6 +23,7 @@ interface Props {
 export const PriceHistoryModal: React.FC<Props> = ({ deal, onClose, onOpenAlert }) => {
   const [history, setHistory] = useState<PricePoint[]>([]);
   const [stats, setStats] = useState<PriceStatistics | null>(null);
+  const [prediction, setPrediction] = useState<PricePrediction | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,9 +33,11 @@ export const PriceHistoryModal: React.FC<Props> = ({ deal, onClose, onOpenAlert 
     Promise.all([
       api.getPriceHistory(deal.offer.id).catch(() => []),
       api.getPriceStatistics(deal.offer.id).catch(() => null),
-    ]).then(([historyData, statsData]) => {
+      api.getPrediction(deal.offer.id).catch(() => null),
+    ]).then(([historyData, statsData, predData]) => {
       setHistory(historyData);
       setStats(statsData);
+      setPrediction(predData);
       setLoading(false);
     });
   }, [deal]);
@@ -159,6 +174,79 @@ export const PriceHistoryModal: React.FC<Props> = ({ deal, onClose, onOpenAlert 
             </div>
           )}
         </div>
+
+        {/* AI Deal Intelligence & Anti-Fraud Audit */}
+        {prediction && (
+          <div className="my-4 p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white border border-slate-700 shadow-md">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-orange-400">
+                <Sparkles className="w-4 h-4" />
+                <span>DealHunter AI Engine™</span>
+              </div>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-700/80 text-slate-300 font-mono">
+                Confianza {prediction.confidenceScore}%
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
+              {prediction.recommendation === 'BUY_NOW' && (
+                <span className="px-3 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-black flex items-center gap-1">
+                  <TrendingDown className="w-3.5 h-3.5" /> ¡COMPRA AHORA!
+                </span>
+              )}
+              {prediction.recommendation === 'WAIT' && (
+                <span className="px-3 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-black flex items-center gap-1">
+                  <TrendingDown className="w-3.5 h-3.5" /> ESPERA (BAJADA PREVISTA)
+                </span>
+              )}
+              {prediction.recommendation === 'OVERPRICED' && (
+                <span className="px-3 py-1 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-black flex items-center gap-1">
+                  <TrendingUp className="w-3.5 h-3.5" /> SOBREPRECIO DETECTADO
+                </span>
+              )}
+              {prediction.recommendation === 'FAIR_PRICE' && (
+                <span className="px-3 py-1 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-500/40 text-xs font-black flex items-center gap-1">
+                  <Minus className="w-3.5 h-3.5" /> PRECIO ESTABLE
+                </span>
+              )}
+
+              <span className="text-xs text-slate-300">
+                Proyección: <strong className="text-white">{formatPrice(prediction.predictedNextPrice)}</strong>
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed mb-3">
+              {prediction.recommendationReason}
+            </p>
+
+            {/* Fake Discount Verification Alert */}
+            {prediction.fakeDiscountAnalysis && (
+              <div
+                className={`p-2.5 rounded-xl text-xs flex items-start gap-2 border ${
+                  prediction.fakeDiscountAnalysis.confidence === 'SUSPECTED_INFLATION'
+                    ? 'bg-rose-950/60 border-rose-500/50 text-rose-200'
+                    : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                }`}
+              >
+                {prediction.fakeDiscountAnalysis.confidence === 'SUSPECTED_INFLATION' ? (
+                  <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                ) : (
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <span className="font-semibold block">
+                    {prediction.fakeDiscountAnalysis.confidence === 'SUSPECTED_INFLATION'
+                      ? '⚠️ Alerta de Oferta Engañosa (Inflación Artificial)'
+                      : '✓ Auditoría de Autenticidad Aprobada'}
+                  </span>
+                  <span className="text-[11px] opacity-90 block mt-0.5">
+                    {prediction.fakeDiscountAnalysis.explanation}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Footer Actions */}
         <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
