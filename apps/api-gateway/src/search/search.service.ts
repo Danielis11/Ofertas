@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Offer } from '../offers/entities/offer.entity';
@@ -7,6 +7,7 @@ import { Category } from '../products/entities/category.entity';
 import { Store } from '../stores/entities/store.entity';
 import { DealsService } from '../deals/deals.service';
 import { RedisService } from '../redis/redis.service';
+import { LiveSearchService } from './live-search.service';
 import { SearchQueryDto, SearchSortBy } from './dto/search-query.dto';
 import { SearchResultDto, SearchFacetsDto } from './dto/search-result.dto';
 import { SuggestionsResultDto } from './dto/suggestions.dto';
@@ -25,7 +26,9 @@ export class SearchService {
     private readonly storeRepo: Repository<Store>,
     private readonly dealsService: DealsService,
     private readonly redisService: RedisService,
+    @Optional() private readonly liveSearchService?: LiveSearchService,
   ) {}
+
 
   private normalizeString(text: string): string {
     return text
@@ -120,10 +123,20 @@ export class SearchService {
       qb.andWhere('offer.price <= :maxPrice', { maxPrice: queryDto.maxPrice });
     }
 
-    const matchedOffers = await qb.getMany();
+    let matchedOffers = await qb.getMany();
+
+    // LIVE ON-DEMAND RESOLVER: If local DB has fewer than 2 results for this search query,
+    // dynamically search real Mexican retailers (Amazon, Elektra, Motorola) in real-time!
+    if (matchedOffers.length < 2 && queryDto.q && queryDto.q.trim().length >= 2 && this.liveSearchService) {
+      const ingested = await this.liveSearchService.resolveLiveProducts(queryDto.q.trim());
+      if (ingested > 0) {
+        matchedOffers = await qb.getMany();
+      }
+    }
 
     // 7. Calculate dynamic facets from matched offers
     const facets = this.calculateFacets(matchedOffers);
+
 
     // 8. Evaluate deal scores for each matching offer
     const scoredDeals: DealScoreDto[] = [];
