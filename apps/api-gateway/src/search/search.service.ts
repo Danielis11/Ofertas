@@ -1,4 +1,4 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Offer } from '../offers/entities/offer.entity';
@@ -61,23 +61,35 @@ export class SearchService {
       qb.andWhere('offer.availability = :availability', { availability: true });
     }
 
-    // 2. Text Search (q)
+    // 2. Text Search (q) with Alias Expansion
     if (queryDto.q && queryDto.q.trim().length > 0) {
+      const qLower = queryDto.q.toLowerCase().trim();
+      const aliasMap: Record<string, string> = {
+        ps5: 'playstation 5',
+        ps4: 'playstation 4',
+        switch: 'nintendo switch',
+      };
+      const expanded = aliasMap[qLower] || qLower;
       const rawTerm = `%${queryDto.q.trim()}%`;
       const normTerm = `%${this.normalizeString(queryDto.q)}%`;
+      const expTerm = `%${expanded}%`;
       qb.andWhere(
         '(' +
           'product.normalizedName ILIKE :normTerm OR ' +
+          'product.normalizedName ILIKE :expTerm OR ' +
           'product.name ILIKE :rawTerm OR ' +
+          'product.name ILIKE :expTerm OR ' +
           'product.brand ILIKE :rawTerm OR ' +
           'product.model ILIKE :rawTerm OR ' +
+          'product.model ILIKE :expTerm OR ' +
           'product.description ILIKE :rawTerm OR ' +
           'category.name ILIKE :rawTerm OR ' +
           'store.name ILIKE :rawTerm' +
         ')',
-        { rawTerm, normTerm },
+        { rawTerm, normTerm, expTerm },
       );
     }
+
 
     // 3. Category filters
     if (queryDto.categoryId) {

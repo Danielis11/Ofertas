@@ -178,6 +178,20 @@ export const api = {
     return res.json();
   },
 
+  // Multi-Store Offers Comparison
+  async getProductOffers(productId: string): Promise<Offer[]> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/offers/product/${productId}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) return [];
+      return res.json();
+    } catch {
+      return [];
+    }
+  },
+
+
   // Alerts
   async createAlert(token: string, data: { productId: string; targetPrice: number; notifyChannels?: string[] }) {
     const res = await fetch(`${API_BASE_URL}/alerts`, {

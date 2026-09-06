@@ -11,8 +11,10 @@ import {
   Bell,
   Sparkles,
   AlertTriangle,
+  ExternalLink,
+  Store as StoreIcon,
 } from 'lucide-react';
-import { DealScore, PricePoint, PriceStatistics, PricePrediction, api } from '../lib/api';
+import { DealScore, PricePoint, PriceStatistics, PricePrediction, Offer, api } from '../lib/api';
 
 interface Props {
   deal: DealScore | null;
@@ -24,6 +26,7 @@ export const PriceHistoryModal: React.FC<Props> = ({ deal, onClose, onOpenAlert 
   const [history, setHistory] = useState<PricePoint[]>([]);
   const [stats, setStats] = useState<PriceStatistics | null>(null);
   const [prediction, setPrediction] = useState<PricePrediction | null>(null);
+  const [otherOffers, setOtherOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,13 +37,16 @@ export const PriceHistoryModal: React.FC<Props> = ({ deal, onClose, onOpenAlert 
       api.getPriceHistory(deal.offer.id).catch(() => []),
       api.getPriceStatistics(deal.offer.id).catch(() => null),
       api.getPrediction(deal.offer.id).catch(() => null),
-    ]).then(([historyData, statsData, predData]) => {
+      api.getProductOffers(deal.offer.productId).catch(() => []),
+    ]).then(([historyData, statsData, predData, offersData]) => {
       setHistory(historyData);
       setStats(statsData);
       setPrediction(predData);
+      setOtherOffers(offersData);
       setLoading(false);
     });
   }, [deal]);
+
 
   if (!deal) return null;
 
@@ -245,6 +251,98 @@ export const PriceHistoryModal: React.FC<Props> = ({ deal, onClose, onOpenAlert 
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Cross-Store Multi-Vendor Price Comparison */}
+        {otherOffers.length > 1 && (
+          <div className="my-4 bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                <StoreIcon className="w-4 h-4 text-orange-600" />
+                <span>Comparativa de Precios en Tiendas Oficiales ({otherOffers.length} tiendas)</span>
+              </div>
+              <span className="text-[11px] font-medium text-slate-500">
+                Precios en tiempo real
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {otherOffers.map((off, idx) => {
+                const isCurrent = off.id === offer.id;
+                const isCheapest = idx === 0;
+                const diff = Number(off.price) - Number(otherOffers[0].price);
+
+                return (
+                  <div
+                    key={off.id}
+                    className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                      isCheapest
+                        ? 'bg-emerald-50/70 border-emerald-300 shadow-xs'
+                        : isCurrent
+                        ? 'bg-orange-50/50 border-orange-200'
+                        : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {off.store?.logo ? (
+                        <img
+                          src={off.store.logo}
+                          alt={off.store.name}
+                          className="w-8 h-8 object-contain bg-white rounded-md p-1 border border-slate-100"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-md bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600">
+                          {off.store?.name?.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-800">
+                            {off.store?.name || 'Tienda'}
+                          </span>
+                          {isCheapest && (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-extrabold uppercase tracking-wide">
+                              🏆 Mejor Precio
+                            </span>
+                          )}
+                          {isCurrent && !isCheapest && (
+                            <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-semibold">
+                              Viendo ahora
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-slate-500">
+                          {isCheapest
+                            ? 'La opción más económica hoy'
+                            : `+${formatPrice(diff)} vs ${otherOffers[0].store?.name}`}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-black text-slate-900">
+                        {formatPrice(Number(off.price))}
+                      </span>
+                      <a
+                        href={off.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          isCheapest
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        <span>Ver tienda</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

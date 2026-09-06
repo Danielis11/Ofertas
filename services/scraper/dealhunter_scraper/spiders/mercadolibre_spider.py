@@ -5,24 +5,26 @@ from ..extractors.mercadolibre_extractor import MercadoLibreExtractor
 
 class MercadoLibreSpider(scrapy.Spider):
     name = "mercadolibre"
-    allowed_domains = ["mercadolibre.com.mx"]
+    allowed_domains = ["mercadolibre.com.mx", "listado.mercadolibre.com.mx"]
     custom_settings = {
         'ROBOTSTXT_OBEY': False,
         'DOWNLOAD_DELAY': 2.0,
         'CONCURRENT_REQUESTS_PER_DOMAIN': 2,
     }
 
-    def __init__(self, query: str = "nintendo switch oled", *args, **kwargs):
+    def __init__(self, query: str = "samsung-galaxy-s23", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.query = query
         self.extractor = MercadoLibreExtractor()
 
     def start_requests(self):
-        encoded_query = quote_plus(self.query)
-        url = f"https://listado.mercadolibre.com.mx/{encoded_query}#D[A:{encoded_query}]"
+        slug = self.query.strip().replace(' ', '-')
+        url = f"https://listado.mercadolibre.com.mx/{slug}"
         yield scrapy.Request(
             url=url,
             callback=self.parse,
+            dont_filter=True,
+
             headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 'Accept-Language': 'es-MX,es;q=0.9',
