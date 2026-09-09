@@ -63,10 +63,28 @@ export class StoresService implements OnModuleInit {
     return this.storeRepo.save(store);
   }
 
-  async findAll(): Promise<Store[]> {
-    return this.storeRepo.find({
-      order: { name: 'ASC' },
-    });
+  async findAll(): Promise<any[]> {
+    const rawStores = await this.storeRepo
+      .createQueryBuilder('store')
+      .leftJoin('store.offers', 'offer', 'offer.availability = :avail', { avail: true })
+      .select([
+        'store.id as id',
+        'store.name as name',
+        'store.slug as slug',
+        'store.domain as domain',
+        'store.logo as logo',
+        'store.status as status',
+        'COUNT(offer.id)::int as "offerCount"',
+      ])
+      .groupBy('store.id')
+      .orderBy('"offerCount"', 'DESC')
+      .addOrderBy('store.name', 'ASC')
+      .getRawMany();
+
+    return rawStores.map((s) => ({
+      ...s,
+      offerCount: Number(s.offerCount || 0),
+    }));
   }
 
   async findById(id: string): Promise<Store> {
@@ -81,6 +99,9 @@ export class StoresService implements OnModuleInit {
   }
 
   async findBySlug(slug: string): Promise<Store> {
+    if (!slug) {
+      throw new NotFoundException(`Store slug is required`);
+    }
     const store = await this.storeRepo.findOne({
       where: { slug },
       relations: { offers: true },

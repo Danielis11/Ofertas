@@ -50,6 +50,18 @@ export class Offer {
   @Column({ name: 'last_seen', type: 'timestamptz', default: () => 'CURRENT_TIMESTAMP' })
   lastSeen!: Date;
 
+  @Column({ name: 'seller_name', type: 'varchar', length: 150, nullable: true })
+  sellerName?: string;
+
+  @Column({ name: 'is_official_store', type: 'boolean', default: false })
+  isOfficialStore!: boolean;
+
+  @Column({ name: 'deal_score', type: 'int', default: 50 })
+  dealScore!: number;
+
+  @Column({ name: 'savings_percentage', type: 'decimal', precision: 5, scale: 2, default: 0 })
+  savingsPercentage!: number;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

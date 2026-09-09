@@ -4,15 +4,16 @@ import {
   TrendingDown,
   TrendingUp,
   Minus,
-  ArrowUpRight,
-  ArrowDownRight,
   ShieldCheck,
   ShieldAlert,
   Bell,
-  Sparkles,
-  AlertTriangle,
   ExternalLink,
   Store as StoreIcon,
+  Award,
+  Calendar,
+  Heart,
+  Sparkles,
+  CheckCircle2,
 } from 'lucide-react';
 import { DealScore, PricePoint, PriceStatistics, PricePrediction, Offer, api } from '../lib/api';
 
@@ -20,14 +21,24 @@ interface Props {
   deal: DealScore | null;
   onClose: () => void;
   onOpenAlert: (deal: DealScore) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: (deal: DealScore) => void;
 }
 
-export const PriceHistoryModal: React.FC<Props> = ({ deal, onClose, onOpenAlert }) => {
+export const PriceHistoryModal: React.FC<Props> = ({
+  deal,
+  onClose,
+  onOpenAlert,
+  isFavorite = false,
+  onToggleFavorite,
+}) => {
   const [history, setHistory] = useState<PricePoint[]>([]);
   const [stats, setStats] = useState<PriceStatistics | null>(null);
   const [prediction, setPrediction] = useState<PricePrediction | null>(null);
   const [otherOffers, setOtherOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const svgRef = React.useRef<SVGSVGElement | null>(null);
 
   useEffect(() => {
     if (!deal) return;
@@ -47,7 +58,6 @@ export const PriceHistoryModal: React.FC<Props> = ({ deal, onClose, onOpenAlert 
     });
   }, [deal]);
 
-
   if (!deal) return null;
 
   const { offer } = deal;
@@ -62,212 +72,509 @@ export const PriceHistoryModal: React.FC<Props> = ({ deal, onClose, onOpenAlert 
     }).format(val);
   };
 
-  // SVG Chart points calculation
-  const chartPoints = history.length > 0 ? history : [{ id: '1', price: Number(offer.price), recordedAt: new Date().toISOString() }];
+  // SVG Chart calculation on clean white/slate canvas
+  const chartPoints =
+    history.length > 0
+      ? history
+      : [{ id: '1', price: Number(offer.price), recordedAt: new Date().toISOString() }];
+
   const prices = chartPoints.map((p) => Number(p.price));
-  const minP = Math.min(...prices) * 0.95;
-  const maxP = Math.max(...prices) * 1.05;
+  const actualMin = Math.min(...prices);
+  const actualMax = Math.max(...prices);
+  const actualAvg = stats?.avgPrice || prices.reduce((a, b) => a + b, 0) / prices.length;
+  const spread = actualMax - actualMin || actualMax * 0.1 || 10;
+  const minP = Math.max(0, actualMin - spread * 0.15);
+  const maxP = actualMax + spread * 0.15;
   const range = maxP - minP || 1;
 
-  const width = 500;
-  const height = 180;
-  const padding = 20;
+  const width = 560;
+  const height = 160;
+  const paddingLeft = 15;
+  const paddingRight = 65;
+  const paddingTop = 25;
+  const paddingBottom = 25;
 
   const coordinates = chartPoints.map((pt, idx) => {
-    const x = padding + (idx / Math.max(1, chartPoints.length - 1)) * (width - padding * 2);
-    const y = height - padding - ((Number(pt.price) - minP) / range) * (height - padding * 2);
-    return { x, y, price: Number(pt.price), date: new Date(pt.recordedAt).toLocaleDateString('es-MX') };
+    const x =
+      chartPoints.length === 1
+        ? (width - paddingRight) / 2
+        : paddingLeft + (idx / (chartPoints.length - 1)) * (width - paddingLeft - paddingRight);
+    const y =
+      height -
+      paddingBottom -
+      ((Number(pt.price) - minP) / range) * (height - paddingTop - paddingBottom);
+    return {
+      x,
+      y,
+      price: Number(pt.price),
+      date: new Date(pt.recordedAt).toLocaleDateString('es-MX', {
+        day: 'numeric',
+        month: 'short',
+      }),
+    };
   });
 
-  const pathD = coordinates.reduce((acc, pt, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '');
+  const pathD = coordinates.reduce(
+    (acc, pt, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`,
+    '',
+  );
+
+  const areaD = coordinates.length > 1
+    ? `${pathD} L ${coordinates[coordinates.length - 1].x.toFixed(1)} ${height - paddingBottom} L ${coordinates[0].x.toFixed(1)} ${height - paddingBottom} Z`
+    : '';
+
+  let minIdx = 0;
+  let maxIdx = 0;
+  coordinates.forEach((pt, i) => {
+    if (pt.price < coordinates[minIdx].price) minIdx = i;
+    if (pt.price > coordinates[maxIdx].price) maxIdx = i;
+  });
+
+  const yForPrice = (p: number) =>
+    height - paddingBottom - ((p - minP) / range) * (height - paddingTop - paddingBottom);
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!svgRef.current || coordinates.length === 0) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const mouseX = ((e.clientX - rect.left) / rect.width) * width;
+    let closestIdx = 0;
+    let minDiff = Infinity;
+    coordinates.forEach((pt, i) => {
+      const d = Math.abs(pt.x - mouseX);
+      if (d < minDiff) {
+        minDiff = d;
+        closestIdx = i;
+      }
+    });
+    setHoveredIndex(closestIdx);
+  };
+
+  const currentPrice = Number(offer.price);
+  const minRecorded = stats?.minPrice ?? (prices.length > 0 ? Math.min(...prices) : currentPrice);
+  const maxRecorded = stats?.maxPrice ?? (prices.length > 0 ? Math.max(...prices) : currentPrice);
+  const avgRecorded = stats?.avgPrice ?? (prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : currentPrice);
+
+  const isRecordLow = currentPrice <= minRecorded;
+  const isNearRecordLow = !isRecordLow && currentPrice <= minRecorded * 1.05;
+  const isBelowAvg = currentPrice < avgRecorded;
+  const savingsVsMax = Math.max(0, maxRecorded - currentPrice);
+  const savingsPctVsMax = maxRecorded > 0 ? Math.round((savingsVsMax / maxRecorded) * 100) : 0;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto">
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl border border-slate-200 relative max-h-[90vh] overflow-y-auto space-y-5">
+        {/* Top actions: Favorite & Close */}
+        <div className="absolute top-4 right-4 flex items-center gap-1.5 z-10">
+          {onToggleFavorite && (
+            <button
+              type="button"
+              onClick={() => onToggleFavorite(deal)}
+              className={`p-1.5 rounded-lg border transition-colors ${
+                isFavorite
+                  ? 'bg-rose-50 border-rose-200 text-rose-500'
+                  : 'bg-white border-slate-200 text-slate-400 hover:text-rose-500 hover:bg-slate-50'
+              }`}
+              title={isFavorite ? 'Quitar de Me Gusta' : 'Guardar en Me Gusta'}
+            >
+              <Heart className={`w-4 h-4 ${isFavorite ? 'fill-rose-500 text-rose-500' : ''}`} />
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            title="Cerrar ventana"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-        {/* Header */}
-        <div className="mb-4">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-orange-100 text-orange-700">
-              {offer.store?.name}
+        {/* Product & Store Header */}
+        <div className="space-y-1.5 pr-16">
+          <div className="flex items-center gap-2 flex-wrap text-xs text-slate-700">
+            <span className="font-bold text-slate-900">
+              {offer.store?.name || 'Tienda'}
             </span>
-            {product?.brand && <span className="text-xs text-slate-400 font-medium">{product.brand}</span>}
+            {offer.isOfficialStore && (
+              <span className="font-medium text-emerald-700">
+                · Tienda oficial
+              </span>
+            )}
+            {product?.brand && (
+              <span className="text-slate-400 font-medium">
+                · {product.brand}
+              </span>
+            )}
           </div>
-          <h2 className="text-lg font-bold text-slate-900 line-clamp-1">{product?.name}</h2>
-          <div className="flex items-baseline gap-3 mt-1">
-            <span className="text-2xl font-black text-slate-900">{formatPrice(Number(offer.price))}</span>
-            <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-              Deal Score: {deal.score}/100 ({deal.grade.replace('_', ' ')})
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug line-clamp-2">
+            {product?.name || 'Historial de precio'}
+          </h2>
+          <div className="flex items-baseline gap-3 pt-1">
+            <span className="text-2xl font-black text-slate-900">
+              {formatPrice(Number(offer.price))}
+            </span>
+            <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
+              <Award className="w-3.5 h-3.5" />
+              <span>Score {deal.score} · {deal.grade.replace('_', ' ')}</span>
             </span>
           </div>
         </div>
 
-        {/* Key Statistics */}
-        <div className="grid grid-cols-4 gap-3 my-4">
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-            <span className="text-[11px] text-slate-500 font-medium block">Mínimo Histórico</span>
-            <span className="text-sm font-bold text-emerald-600 flex items-center gap-0.5 mt-0.5">
-              <ArrowDownRight className="w-4 h-4" />
-              {formatPrice(stats?.minPrice || Number(offer.price))}
-            </span>
-          </div>
-
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-            <span className="text-[11px] text-slate-500 font-medium block">Precio Promedio</span>
-            <span className="text-sm font-bold text-slate-700 block mt-0.5">
-              {formatPrice(stats?.avgPrice || Number(offer.price))}
-            </span>
-          </div>
-
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-            <span className="text-[11px] text-slate-500 font-medium block">Precio Máximo</span>
-            <span className="text-sm font-bold text-rose-500 flex items-center gap-0.5 mt-0.5">
-              <ArrowUpRight className="w-4 h-4" />
-              {formatPrice(stats?.maxPrice || Number(offer.price))}
-            </span>
-          </div>
-
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-            <span className="text-[11px] text-slate-500 font-medium block">Bajadas Registradas</span>
-            <span className="text-sm font-bold text-orange-600 block mt-0.5">
-              {stats?.priceDropsCount ?? 1} veces
-            </span>
-          </div>
-        </div>
-
-        {/* Price History Chart */}
-        <div className="my-4 bg-slate-950 rounded-2xl p-4 text-white">
-          <div className="flex justify-between items-center mb-3">
-            <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <TrendingDown className="w-4 h-4 text-orange-400" />
-              <span>Fluctuación Histórica de Precios</span>
+        {/* Recorrido Completo del Precio & Diagnóstico de Compra */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-600" />
+              <span className="text-xs font-bold text-slate-900">Recorrido del Precio</span>
             </div>
-            <span className="text-[11px] text-slate-400">{chartPoints.length} puntos de datos</span>
+
+            {/* Smart Diagnosis Badge */}
+            {isRecordLow ? (
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                Mínimo Histórico Absoluto
+              </span>
+            ) : isNearRecordLow ? (
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
+                <TrendingDown className="w-3.5 h-3.5 text-emerald-600" />
+                Momento Óptimo para Comprar
+              </span>
+            ) : isBelowAvg ? (
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700">
+                <TrendingDown className="w-3.5 h-3.5 text-slate-500" />
+                Por debajo del promedio
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500">
+                <Minus className="w-3.5 h-3.5 text-slate-400" />
+                Precio habitual de mercado
+              </span>
+            )}
+          </div>
+
+          {/* Visual Journey Milestones */}
+          <div className="relative pt-2 pb-1">
+            <div className="grid grid-cols-4 gap-2 text-center">
+              {/* Milestone 1: Max */}
+              <div className="space-y-1 p-2 bg-white rounded-lg border border-slate-200">
+                <span className="text-[10px] uppercase font-semibold text-slate-400 block tracking-wider">
+                  Máximo
+                </span>
+                <span className="text-xs font-bold text-slate-600 block">
+                  {formatPrice(maxRecorded)}
+                </span>
+              </div>
+
+              {/* Milestone 2: Average */}
+              <div className="space-y-1 p-2 bg-white rounded-lg border border-slate-200">
+                <span className="text-[10px] uppercase font-semibold text-slate-400 block tracking-wider">
+                  Promedio
+                </span>
+                <span className="text-xs font-bold text-slate-700 block">
+                  {formatPrice(avgRecorded)}
+                </span>
+              </div>
+
+              {/* Milestone 3: Record Low */}
+              <div className="space-y-1 p-2 bg-white rounded-lg border border-slate-200">
+                <span className="text-[10px] uppercase font-semibold text-emerald-700 block tracking-wider">
+                  Récord Mínimo
+                </span>
+                <span className="text-xs font-bold text-emerald-700 block">
+                  {formatPrice(minRecorded)}
+                </span>
+              </div>
+
+              {/* Milestone 4: Current */}
+              <div className="space-y-1 p-2 bg-white rounded-lg border border-slate-900/20 shadow-2xs">
+                <span className="text-[10px] uppercase font-bold text-slate-900 block tracking-wider">
+                  Actual
+                </span>
+                <span className="text-xs font-black text-slate-900 block">
+                  {formatPrice(currentPrice)}
+                </span>
+              </div>
+            </div>
+
+            {/* Savings Callout */}
+            {savingsPctVsMax > 0 && (
+              <div className="mt-2.5 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
+                <span className="text-emerald-900 font-medium">
+                  Ahorras <strong className="font-bold">{formatPrice(savingsVsMax)}</strong> respecto a su precio máximo registrado.
+                </span>
+                <span className="text-xs font-bold text-emerald-700 shrink-0">
+                  -{savingsPctVsMax}% de rebaja
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Minimalist Price Trend Chart (Light canvas, solid lines, clean data points) */}
+        <div className="bg-slate-50/70 rounded-xl p-4 border border-slate-200 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+              <Calendar className="w-3.5 h-3.5 text-slate-500" />
+              <span>Evolución del Precio en el Tiempo</span>
+            </div>
+            <span className="text-[11px] font-medium text-slate-500">
+              {coordinates.length} {coordinates.length === 1 ? 'registro' : 'registros históricos'}
+            </span>
           </div>
 
           {loading ? (
-            <div className="h-44 flex items-center justify-center text-slate-400 text-xs">
-              Cargando historial...
+            <div className="h-40 flex items-center justify-center text-slate-400 text-xs font-medium">
+              Cargando historial de precios...
             </div>
           ) : (
-            <div className="relative">
-              <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-44 overflow-visible">
-                {/* Horizontal Guide lines */}
-                <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="#334155" strokeDasharray="3 3" />
-                <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="#334155" strokeDasharray="3 3" />
-                <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#334155" strokeDasharray="3 3" />
+            <div className="w-full relative select-none">
+              <svg
+                ref={svgRef}
+                viewBox={`0 0 ${width} ${height}`}
+                className="w-full h-44 cursor-crosshair overflow-visible"
+                onMouseMove={handleMouseMove}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                <defs>
+                  <linearGradient id="priceAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#0f172a" stopOpacity="0.08" />
+                    <stop offset="100%" stopColor="#0f172a" stopOpacity="0.00" />
+                  </linearGradient>
+                </defs>
 
-                {/* Line Path */}
-                <path d={pathD} fill="none" stroke="#f97316" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                {/* Reference Guideline: Maximum */}
+                <line
+                  x1={paddingLeft}
+                  y1={yForPrice(actualMax)}
+                  x2={width - paddingRight}
+                  y2={yForPrice(actualMax)}
+                  stroke="#cbd5e1"
+                  strokeDasharray="3 3"
+                  strokeWidth="1"
+                />
+                <text
+                  x={width - paddingRight + 6}
+                  y={yForPrice(actualMax) + 3}
+                  className="text-[10px] font-medium fill-slate-400"
+                >
+                  {formatPrice(actualMax)}
+                </text>
 
-                {/* Points */}
-                {coordinates.map((pt, i) => (
-                  <circle key={i} cx={pt.x} cy={pt.y} r="4" fill="#f97316" stroke="#ffffff" strokeWidth="2" />
-                ))}
+                {/* Reference Guideline: Average */}
+                {actualMax !== actualMin && (
+                  <>
+                    <line
+                      x1={paddingLeft}
+                      y1={yForPrice(actualAvg)}
+                      x2={width - paddingRight}
+                      y2={yForPrice(actualAvg)}
+                      stroke="#e2e8f0"
+                      strokeDasharray="2 2"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={width - paddingRight + 6}
+                      y={yForPrice(actualAvg) + 3}
+                      className="text-[9px] font-medium fill-slate-400"
+                    >
+                      Prom: {formatPrice(actualAvg)}
+                    </text>
+                  </>
+                )}
+
+                {/* Reference Guideline: Minimum */}
+                <line
+                  x1={paddingLeft}
+                  y1={yForPrice(actualMin)}
+                  x2={width - paddingRight}
+                  y2={yForPrice(actualMin)}
+                  stroke="#cbd5e1"
+                  strokeDasharray="3 3"
+                  strokeWidth="1"
+                />
+                <text
+                  x={width - paddingRight + 6}
+                  y={yForPrice(actualMin) + 3}
+                  className="text-[10px] font-bold fill-emerald-600"
+                >
+                  {formatPrice(actualMin)}
+                </text>
+
+                {/* Shaded Area under Curve */}
+                {areaD && (
+                  <path
+                    d={areaD}
+                    fill="url(#priceAreaGrad)"
+                  />
+                )}
+
+                {/* Trend Stroke Line */}
+                {coordinates.length > 1 && (
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke="#0f172a"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                )}
+
+                {/* Clean Key Points (Start, Min, Current) without Clutter */}
+                {/* Initial Point */}
+                <circle
+                  cx={coordinates[0].x}
+                  cy={coordinates[0].y}
+                  r="3.5"
+                  fill="#64748b"
+                />
+
+                {/* Minimum Point (highlighted if different from start and end) */}
+                {minIdx !== 0 && minIdx !== coordinates.length - 1 && (
+                  <circle
+                    cx={coordinates[minIdx].x}
+                    cy={coordinates[minIdx].y}
+                    r="4"
+                    fill="#059669"
+                    stroke="#ffffff"
+                    strokeWidth="2"
+                  />
+                )}
+
+                {/* Current / Last Point */}
+                <circle
+                  cx={coordinates[coordinates.length - 1].x}
+                  cy={coordinates[coordinates.length - 1].y}
+                  r="4.5"
+                  fill="#0f172a"
+                  stroke="#ffffff"
+                  strokeWidth="2"
+                />
+
+                {/* Interactive Crosshair & Tooltip on Hover */}
+                {hoveredIndex !== null && coordinates[hoveredIndex] && (
+                  <g pointerEvents="none">
+                    {/* Vertical indicator line */}
+                    <line
+                      x1={coordinates[hoveredIndex].x}
+                      y1={paddingTop}
+                      x2={coordinates[hoveredIndex].x}
+                      y2={height - paddingBottom}
+                      stroke="#475569"
+                      strokeDasharray="3 3"
+                      strokeWidth="1.5"
+                    />
+
+                    {/* Active point circle */}
+                    <circle
+                      cx={coordinates[hoveredIndex].x}
+                      cy={coordinates[hoveredIndex].y}
+                      r="6"
+                      fill="#0f172a"
+                      stroke="#ffffff"
+                      strokeWidth="2.5"
+                    />
+
+                    {/* Floating Tooltip Box */}
+                    <g
+                      transform={`translate(${Math.max(
+                        65,
+                        Math.min(width - paddingRight - 65, coordinates[hoveredIndex].x),
+                      )}, ${Math.max(22, coordinates[hoveredIndex].y - 14)})`}
+                    >
+                      <rect
+                        x="-60"
+                        y="-22"
+                        width="120"
+                        height="24"
+                        rx="6"
+                        fill="#0f172a"
+                        className="shadow-md"
+                      />
+                      <text
+                        x="0"
+                        y="-6"
+                        textAnchor="middle"
+                        fill="#ffffff"
+                        fontSize="11"
+                        fontWeight="bold"
+                      >
+                        {formatPrice(coordinates[hoveredIndex].price)} · {coordinates[hoveredIndex].date}
+                      </text>
+                    </g>
+                  </g>
+                )}
               </svg>
 
-              <div className="flex justify-between text-[10px] text-slate-400 mt-1 px-2">
+              {/* X-axis date labels */}
+              <div className="flex justify-between text-[11px] font-medium text-slate-500 mt-1 px-3">
                 <span>{coordinates[0]?.date || 'Inicio'}</span>
+                {coordinates.length > 2 && (
+                  <span>{coordinates[Math.floor(coordinates.length / 2)]?.date}</span>
+                )}
                 <span>{coordinates[coordinates.length - 1]?.date || 'Hoy'}</span>
               </div>
             </div>
           )}
         </div>
 
-        {/* AI Deal Intelligence & Anti-Fraud Audit */}
+        {/* Clear & Precise Authenticity Audit (Clean neutral card, zero neon) */}
         {prediction && (
-          <div className="my-4 p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white border border-slate-700 shadow-md">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-orange-400">
-                <Sparkles className="w-4 h-4" />
-                <span>DealHunter AI Engine™</span>
+          <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                {prediction.fakeDiscountAnalysis?.confidence === 'SUSPECTED_INFLATION' ? (
+                  <ShieldAlert className="w-4 h-4 text-rose-600" />
+                ) : (
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                )}
+                <span>
+                  {prediction.fakeDiscountAnalysis?.confidence === 'SUSPECTED_INFLATION'
+                    ? 'Atención: Posible oferta inflada'
+                    : 'Auditoría de autenticidad aprobada'}
+                </span>
               </div>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-700/80 text-slate-300 font-mono">
-                Confianza {prediction.confidenceScore}%
-              </span>
-            </div>
 
-            <div className="flex items-center gap-3 mb-2 flex-wrap">
               {prediction.recommendation === 'BUY_NOW' && (
-                <span className="px-3 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-black flex items-center gap-1">
-                  <TrendingDown className="w-3.5 h-3.5" /> ¡COMPRA AHORA!
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
+                  <TrendingDown className="w-3.5 h-3.5 text-emerald-600" />
+                  Buen momento de compra
                 </span>
               )}
               {prediction.recommendation === 'WAIT' && (
-                <span className="px-3 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-black flex items-center gap-1">
-                  <TrendingDown className="w-3.5 h-3.5" /> ESPERA (BAJADA PREVISTA)
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700">
+                  <Minus className="w-3.5 h-3.5 text-amber-600" />
+                  Precio dentro del promedio
                 </span>
               )}
               {prediction.recommendation === 'OVERPRICED' && (
-                <span className="px-3 py-1 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-black flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5" /> SOBREPRECIO DETECTADO
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-700">
+                  <TrendingUp className="w-3.5 h-3.5 text-rose-600" />
+                  Precio por encima de la media
                 </span>
               )}
-              {prediction.recommendation === 'FAIR_PRICE' && (
-                <span className="px-3 py-1 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-500/40 text-xs font-black flex items-center gap-1">
-                  <Minus className="w-3.5 h-3.5" /> PRECIO ESTABLE
-                </span>
-              )}
-
-              <span className="text-xs text-slate-300">
-                Proyección: <strong className="text-white">{formatPrice(prediction.predictedNextPrice)}</strong>
-              </span>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed mb-3">
-              {prediction.recommendationReason}
+            <p className="text-xs text-slate-600 leading-relaxed">
+              {prediction.fakeDiscountAnalysis?.explanation ||
+                prediction.recommendationReason}
             </p>
-
-            {/* Fake Discount Verification Alert */}
-            {prediction.fakeDiscountAnalysis && (
-              <div
-                className={`p-2.5 rounded-xl text-xs flex items-start gap-2 border ${
-                  prediction.fakeDiscountAnalysis.confidence === 'SUSPECTED_INFLATION'
-                    ? 'bg-rose-950/60 border-rose-500/50 text-rose-200'
-                    : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
-                }`}
-              >
-                {prediction.fakeDiscountAnalysis.confidence === 'SUSPECTED_INFLATION' ? (
-                  <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                ) : (
-                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                )}
-                <div>
-                  <span className="font-semibold block">
-                    {prediction.fakeDiscountAnalysis.confidence === 'SUSPECTED_INFLATION'
-                      ? '⚠️ Alerta de Oferta Engañosa (Inflación Artificial)'
-                      : '✓ Auditoría de Autenticidad Aprobada'}
-                  </span>
-                  <span className="text-[11px] opacity-90 block mt-0.5">
-                    {prediction.fakeDiscountAnalysis.explanation}
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
-        {/* Cross-Store Multi-Vendor Price Comparison */}
+        {/* Multi-Store Price Comparison (Clean List) */}
         {otherOffers.length > 1 && (
-          <div className="my-4 bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
-                <StoreIcon className="w-4 h-4 text-orange-600" />
-                <span>Comparativa de Precios en Tiendas Oficiales ({otherOffers.length} tiendas)</span>
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                <StoreIcon className="w-3.5 h-3.5 text-slate-700" />
+                <span>Comparativa en otras tiendas ({otherOffers.length})</span>
               </div>
-              <span className="text-[11px] font-medium text-slate-500">
-                Precios en tiempo real
+              <span className="text-[11px] text-slate-500 font-medium">
+                Precios verificados
               </span>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
               {otherOffers.map((off, idx) => {
                 const isCurrent = off.id === offer.id;
                 const isCheapest = idx === 0;
@@ -276,67 +583,48 @@ export const PriceHistoryModal: React.FC<Props> = ({ deal, onClose, onOpenAlert 
                 return (
                   <div
                     key={off.id}
-                    className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-                      isCheapest
-                        ? 'bg-emerald-50/70 border-emerald-300 shadow-xs'
-                        : isCurrent
-                        ? 'bg-orange-50/50 border-orange-200'
-                        : 'bg-white border-slate-200'
+                    className={`flex items-center justify-between p-2.5 rounded-lg border text-xs transition-colors ${
+                      isCurrent
+                        ? 'bg-slate-50 border-slate-300'
+                        : 'bg-white border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      {off.store?.logo ? (
-                        <img
-                          src={off.store.logo}
-                          alt={off.store.name}
-                          className="w-8 h-8 object-contain bg-white rounded-md p-1 border border-slate-100"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-md bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600">
-                          {off.store?.name?.slice(0, 2).toUpperCase()}
-                        </div>
-                      )}
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-800">
-                            {off.store?.name || 'Tienda'}
-                          </span>
-                          {isCheapest && (
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-extrabold uppercase tracking-wide">
-                              🏆 Mejor Precio
-                            </span>
-                          )}
-                          {isCurrent && !isCheapest && (
-                            <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-semibold">
-                              Viendo ahora
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[11px] text-slate-500">
-                          {isCheapest
-                            ? 'La opción más económica hoy'
-                            : `+${formatPrice(diff)} vs ${otherOffers[0].store?.name}`}
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-800">
+                        {off.store?.name || 'Tienda'}
+                      </span>
+                      {isCheapest && (
+                        <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-emerald-700">
+                          <Award className="w-3 h-3 text-emerald-600" />
+                          Mejor precio
                         </span>
-                      </div>
+                      )}
+                      {isCurrent && (
+                        <span className="text-[11px] text-slate-400 font-normal">
+                          (Viendo)
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <span className="text-sm font-black text-slate-900">
-                        {formatPrice(Number(off.price))}
-                      </span>
+                      <div className="text-right">
+                        <span className="font-bold text-slate-900 block">
+                          {formatPrice(Number(off.price))}
+                        </span>
+                        {!isCheapest && (
+                          <span className="text-[10px] text-slate-400 block">
+                            +{formatPrice(diff)}
+                          </span>
+                        )}
+                      </div>
                       <a
                         href={off.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                          isCheapest
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                        }`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors"
                       >
-                        <span>Ver tienda</span>
-                        <ExternalLink className="w-3 h-3" />
+                        <span>Ir</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
                       </a>
                     </div>
                   </div>
@@ -346,29 +634,30 @@ export const PriceHistoryModal: React.FC<Props> = ({ deal, onClose, onOpenAlert 
           </div>
         )}
 
-        {/* Footer Actions */}
-        <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-          <div className="text-xs text-slate-500 flex items-center gap-1">
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <span>Verificado algorítmicamente por DealHunter Engine</span>
+        {/* Modal Footer (Solid Minimalist Controls) */}
+        <div className="pt-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-xs text-slate-500 flex items-center gap-1.5">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Precios extraídos y monitoreados en tiempo real (MXN)</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               onClick={() => onOpenAlert(deal)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 text-white font-semibold text-xs hover:bg-amber-600 transition-colors shadow-sm"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 text-slate-800 bg-white hover:bg-slate-50 text-xs font-semibold transition-colors"
             >
-              <Bell className="w-4 h-4" />
-              <span>Crear Alerta de Precio</span>
+              <Bell className="w-3.5 h-3.5 text-amber-600" />
+              <span>Crear Alerta</span>
             </button>
 
             <a
               href={offer.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-4 py-2 rounded-xl bg-orange-600 text-white font-semibold text-xs hover:bg-orange-700 transition-colors shadow-sm"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors"
             >
-              Ir a Oferta
+              <span>Ir a la tienda</span>
+              <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
         </div>

@@ -12,10 +12,13 @@ class AmazonSpider(scrapy.Spider):
         'CONCURRENT_REQUESTS_PER_DOMAIN': 2,
     }
 
-    def __init__(self, query: str = "nintendo switch oled", *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.query = query
+        self.query = kwargs.get('query', 'nintendo switch oled')
         self.extractor = AmazonExtractor()
+        
+        encoded_query = quote_plus(self.query)
+        self.start_urls = [f"https://www.amazon.com.mx/s?k={encoded_query}"]
 
     def start_requests(self):
         encoded_query = quote_plus(self.query)
@@ -23,6 +26,7 @@ class AmazonSpider(scrapy.Spider):
         yield scrapy.Request(
             url=url,
             callback=self.parse,
+            meta={"playwright": True},
             headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 'Accept-Language': 'es-MX,es;q=0.9',

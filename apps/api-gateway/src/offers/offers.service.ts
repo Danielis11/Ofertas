@@ -18,6 +18,10 @@ export class OffersService {
   ) {}
 
   async upsertOffer(createDto: CreateOfferDto): Promise<Offer> {
+    if (!createDto.externalId || !createDto.externalId.trim()) {
+      throw new Error(`externalId is required for upsertOffer`);
+    }
+
     const product = await this.productRepo.findOne({ where: { id: createDto.productId } });
     if (!product) {
       throw new NotFoundException(`Product with ID "${createDto.productId}" not found`);
@@ -31,7 +35,7 @@ export class OffersService {
     let offer = await this.offerRepo.findOne({
       where: {
         storeId: createDto.storeId,
-        externalId: createDto.externalId,
+        externalId: createDto.externalId.trim(),
       },
     });
 
@@ -89,5 +93,36 @@ export class OffersService {
   async remove(id: string): Promise<void> {
     const offer = await this.findById(id);
     await this.offerRepo.remove(offer);
+  }
+
+  /**
+   * Automatically deactivates offers whose last_seen timestamp is older than maxAgeHours.
+   * This prevents dead links or expired promo prices from being displayed to users.
+   */
+  async cleanStaleOffers(maxAgeHours = 48): Promise<{ markedUnavailable: number; cutoff: Date }> {
+    const cutoff = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
+    const result = await this.offerRepo
+      .createQueryBuilder()
+      .update(Offer)
+      .set({ availability: false })
+      .where('last_seen < :cutoff AND availability = true', { cutoff })
+      .execute();
+
+    return {
+      markedUnavailable: result.affected || 0,
+      cutoff,
+    };
+  }
+
+  /**
+   * Check if a specific offer is fresh (seen within the last 24h).
+   */
+  async checkOfferFreshness(id: string): Promise<{ isFresh: boolean; lastSeen: Date }> {
+    const offer = await this.findById(id);
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    return {
+      isFresh: offer.lastSeen ? new Date(offer.lastSeen) >= dayAgo : false,
+      lastSeen: offer.lastSeen,
+    };
   }
 }

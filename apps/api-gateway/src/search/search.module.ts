@@ -10,6 +10,8 @@ import { RedisModule } from '../redis/redis.module';
 import { SearchService } from './search.service';
 import { LiveSearchService } from './live-search.service';
 import { SearchController } from './search.controller';
+import { RecommendationsService } from './recommendations.service';
+import { RecommendationsController } from './recommendations.controller';
 
 @Module({
   imports: [
@@ -17,9 +19,9 @@ import { SearchController } from './search.controller';
     DealsModule,
     RedisModule,
   ],
-  controllers: [SearchController],
-  providers: [SearchService, LiveSearchService],
-  exports: [SearchService, LiveSearchService],
+  controllers: [SearchController, RecommendationsController],
+  providers: [SearchService, LiveSearchService, RecommendationsService],
+  exports: [SearchService, LiveSearchService, RecommendationsService],
 })
 export class SearchModule {}
 

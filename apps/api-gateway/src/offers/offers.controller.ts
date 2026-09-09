@@ -5,11 +5,12 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { OffersService } from './offers.service';
 import { CreateOfferDto } from './dto/create-offer.dto';
 
@@ -28,6 +29,19 @@ export class OffersController {
   @ApiResponse({ status: 404, description: 'Producto o tienda no encontrados.' })
   upsert(@Body() createOfferDto: CreateOfferDto) {
     return this.offersService.upsertOffer(createOfferDto);
+  }
+
+  @Post('clean-stale')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Depurar ofertas inactivas o caducadas',
+    description: 'Marca como no disponibles (availability = false) las ofertas sin actualización en más de maxAgeHours horas.',
+  })
+  @ApiQuery({ name: 'maxAgeHours', required: false, type: Number, description: 'Horas máximas de antigüedad (default: 48)' })
+  @ApiResponse({ status: 200, description: 'Resultado de la limpieza de ofertas obsoletas.' })
+  cleanStale(@Query('maxAgeHours') maxAgeHours?: string) {
+    const hours = maxAgeHours ? parseInt(maxAgeHours, 10) : 48;
+    return this.offersService.cleanStaleOffers(isNaN(hours) ? 48 : hours);
   }
 
   @Get('product/:productId')

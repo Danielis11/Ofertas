@@ -70,12 +70,24 @@ export class DealsService {
     let crossStoreAdvantage = 0;
     let factorStoreScore = 0;
 
+    let otherStores: any[] = [];
     if (offer.productId) {
       const allProductOffers = await this.offersService.findByProductId(offer.productId);
-      const otherOffers = allProductOffers
-        .filter((o) => o.id !== offer.id && o.availability)
+      const activeCompetitors = allProductOffers.filter((o) => o.id !== offer.id && o.availability);
+      const otherOffers = activeCompetitors
         .map((o) => Number(o.price))
         .sort((a, b) => a - b);
+
+      otherStores = activeCompetitors
+        .map((o) => ({
+          storeName: o.store?.name || 'Tienda',
+          storeSlug: o.store?.slug || '',
+          price: Number(o.price),
+          url: o.url,
+          isOfficialStore: o.isOfficialStore,
+          sellerName: o.sellerName,
+        }))
+        .sort((a, b) => a.price - b.price);
 
       if (otherOffers.length > 0) {
         const nextCheapest = otherOffers[0];
@@ -113,6 +125,7 @@ export class DealsService {
         crossStoreAdvantage,
       },
       offer,
+      otherStores,
     };
 
     // Cache deal evaluation for 5 minutes

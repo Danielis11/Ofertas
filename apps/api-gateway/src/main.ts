@@ -6,6 +6,15 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+
+  process.on('unhandledRejection', (reason: any) => {
+    logger.warn(`Unhandled Promise Rejection caught: ${reason?.message || reason}`);
+  });
+
+  process.on('uncaughtException', (err: Error) => {
+    logger.error(`Uncaught Exception caught: ${err.message}`, err.stack);
+  });
+
   const app = await NestFactory.create(AppModule);
 
   const configService = app.get(ConfigService);

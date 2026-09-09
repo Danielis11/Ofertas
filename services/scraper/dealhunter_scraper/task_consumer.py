@@ -1,22 +1,37 @@
 ﻿import json
 import logging
 import os
-import pika
+import sys
+import subprocess
+import time
 from typing import Dict, Any, Optional
+
+import pika
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("TaskConsumer")
+
+DIRECT_RUNNERS = {
+    "elektra-mx": ("elektra_direct.py", "--query"),
+    "amazon-mx": ("amazon_direct_scraper.py", "--query"),
+    "mercado-libre-mx": ("mercadolibre_direct_scraper.py", "--query"),
+}
+
+VTEX_STORES = ["marti-mx", "levis-mx", "guess-mx", "tommy-mx", "miniso-mx"]
 
 SPIDER_MAPPING = {
     "amazon-mx": "amazon",
     "mercado-libre-mx": "mercadolibre",
     "walmart-mx": "walmart",
+    "elektra-mx": "elektra",
+    "sears-mx": "sears",
+    "cyberpuerta-mx": "cyberpuerta",
 }
 
 class TaskConsumer:
     """
     Consumes SCRAPE_TASK_REQUESTED events from RabbitMQ and triggers
-    appropriate Scrapy spiders or crawls.
+    appropriate spiders or direct scrapers.
     """
 
     def __init__(
@@ -34,82 +49,99 @@ class TaskConsumer:
         self.queue_name = "dealhunter.queue.scraper_tasks"
         self.routing_key = "scraper.task.*"
 
-    def process_task(self, task_payload: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Processes a single task payload and resolves target spider execution arguments.
-        """
-        store_slug = task_payload.get("storeSlug")
-        spider_name = SPIDER_MAPPING.get(store_slug)
-
-        if not spider_name:
-            raise ValueError(f"Unknown store slug: {store_slug}")
-
-        search_query = task_payload.get("searchQuery")
-        category = task_payload.get("category")
-        urls = task_payload.get("urls", [])
-        priority = task_payload.get("priority", "NORMAL")
-        max_items = task_payload.get("maxItems", 50)
-        triggered_by = task_payload.get("triggeredBy", "MANUAL")
-
-        logger.info(
-            f"🎯 Processing task for spider [{spider_name}] | Query: '{search_query}' | Priority: {priority}"
-        )
-
-        # Build execution parameters
-        spider_args = {
-            "spider": spider_name,
-            "store_slug": store_slug,
-            "search_query": search_query,
-            "category": category,
-            "urls": urls,
-            "priority": priority,
-            "max_items": max_items,
-            "triggered_by": triggered_by,
-            "status": "QUEUED_FOR_EXECUTION",
-        }
-
-        return spider_args
-
-    def start_consuming(self, max_messages: Optional[int] = None):
-        """
-        Connects to RabbitMQ and begins consuming tasks.
-        """
+    def _get_connection(self):
+        """Create a fresh RabbitMQ connection with heartbeat=0 to avoid timeouts during long crawls."""
         credentials = pika.PlainCredentials(self.user, self.password)
         parameters = pika.ConnectionParameters(
-            host=self.host, port=self.port, credentials=credentials
+            host=self.host,
+            port=self.port,
+            credentials=credentials,
+            heartbeat=0,
+            blocked_connection_timeout=300,
         )
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
+        return pika.BlockingConnection(parameters)
 
-        # Declare exchange and queue
-        channel.exchange_declare(exchange=self.exchange, exchange_type="topic", durable=True)
-        channel.queue_declare(queue=self.queue_name, durable=True)
-        channel.queue_bind(
-            exchange=self.exchange,
-            queue=self.queue_name,
-            routing_key=self.routing_key,
-        )
+    def process_task(self, task_payload: Dict[str, Any]):
+        store_slug = task_payload.get("storeSlug")
+        search_query = task_payload.get("searchQuery", "laptop")
+        priority = task_payload.get("priority", "NORMAL")
 
         logger.info(
-            f"🚀 Scraper Task Consumer started on queue '{self.queue_name}' bound to '{self.routing_key}'"
+            f"🎯 Processing task for [{store_slug}] | Query: '{search_query}' | Priority: {priority}"
         )
 
-        count = 0
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        scraper_project_dir = os.path.dirname(current_dir)
 
-        for method_frame, properties, body in channel.consume(self.queue_name):
+        # 1. Direct Runner (High Performance / Proxy Direct)
+        if store_slug in DIRECT_RUNNERS:
+            script_name, query_flag = DIRECT_RUNNERS[store_slug]
+            script_path = os.path.join(current_dir, script_name)
+            cmd = [sys.executable, script_path]
+            if search_query:
+                cmd.extend([query_flag, search_query])
+
+        # 2. VTEX Universal Stores (Fashion, Lifestyle, Sports)
+        elif store_slug in VTEX_STORES:
+            script_path = os.path.join(current_dir, "universal_vtex_scraper.py")
+            cmd = [sys.executable, script_path, "--store", store_slug]
+
+        # 3. Fallback to Scrapy Spiders
+        elif store_slug in SPIDER_MAPPING:
+            spider_name = SPIDER_MAPPING[store_slug]
+            cmd = [sys.executable, "-m", "scrapy", "crawl", spider_name]
+            if search_query:
+                cmd.extend(["-a", f"query={search_query}"])
+        else:
+            raise ValueError(f"Unknown store slug: {store_slug}")
+
+        logger.info(f"🚀 Running command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, cwd=scraper_project_dir, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            logger.info(f"✅ Scraper [{store_slug}] finished successfully.")
+        else:
+            logger.error(f"❌ Scraper [{store_slug}] failed (code {result.returncode})")
+            if result.stderr:
+                logger.error(f"Stderr: {result.stderr[-500:]}")
+
+    def start_consuming(self):
+        """Connects to RabbitMQ and begins consuming tasks. Auto-reconnects on failure."""
+        while True:
             try:
-                event = json.loads(body.decode("utf-8"))
-                payload = event.get("payload", {})
-                self.process_task(payload)
-                channel.basic_ack(delivery_tag=method_frame.delivery_tag)
-                count += 1
-                if max_messages and count >= max_messages:
-                    break
-            except Exception as e:
-                logger.error(f"Error handling task: {e}")
-                channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=False)
+                logger.info("🔌 Connecting to RabbitMQ...")
+                connection = self._get_connection()
+                channel = connection.channel()
 
-        connection.close()
+                channel.exchange_declare(exchange=self.exchange, exchange_type="topic", durable=True)
+                channel.queue_declare(queue=self.queue_name, durable=True)
+                channel.queue_bind(
+                    exchange=self.exchange,
+                    queue=self.queue_name,
+                    routing_key=self.routing_key,
+                )
+
+                logger.info(
+                    f"🚀 Scraper Task Consumer started on queue '{self.queue_name}'"
+                )
+
+                for method_frame, properties, body in channel.consume(self.queue_name):
+                    try:
+                        event = json.loads(body.decode("utf-8"))
+                        event_name = event.get("eventName")
+
+                        if event_name == "SCRAPE_TASK_REQUESTED":
+                            self.process_task(event.get("payload", {}))
+
+                        channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+                    except Exception as e:
+                        logger.error(f"Error handling task: {e}")
+                        channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=False)
+
+            except (pika.exceptions.AMQPConnectionError, Exception) as e:
+                logger.warning(f"RabbitMQ connection lost ({e}). Reconnecting in 10s...")
+                time.sleep(10)
+
 
 if __name__ == "__main__":
     consumer = TaskConsumer()

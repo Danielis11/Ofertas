@@ -62,7 +62,7 @@ class MercadoLibreExtractor(BaseExtractor):
                 'image_url': image_url,
                 'availability': True,
                 'identifiers': {
-                    'MLM_ID': external_id,
+                    'EXTERNAL_ID': external_id,
                 }
             })
 

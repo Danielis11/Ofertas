@@ -1,13 +1,16 @@
-﻿'use client';
+'use client';
 
 import React, { useState } from 'react';
 import { Navbar } from '../components/Navbar';
 import { HeroBanner } from '../components/HeroBanner';
+import { PersonalizedFeed } from '../components/PersonalizedFeed';
+import { CategoryChips } from '../components/CategoryChips';
 import { DealsExplorer } from '../components/DealsExplorer';
 import { PriceHistoryModal } from '../components/PriceHistoryModal';
 import { AlertModal } from '../components/AlertModal';
 import { DispatcherModal } from '../components/DispatcherModal';
 import { DealScore } from '../lib/api';
+import { useUserIntent } from '../lib/useUserIntent';
 import { Flame, Heart } from 'lucide-react';
 
 export default function HomePage() {
@@ -17,19 +20,44 @@ export default function HomePage() {
   const [activeAlertDeal, setActiveAlertDeal] = useState<DealScore | null>(null);
   const [isDispatcherOpen, setIsDispatcherOpen] = useState(false);
 
+  const { recentIntent, trackQuery, clearIntent } = useUserIntent();
+
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+    if (query.trim().length >= 3) {
+      trackQuery(query);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col">
       {/* Navigation */}
       <Navbar
         searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
+        onSearchChange={handleSearchChange}
         selectedStore={selectedStore}
         onSelectStore={setSelectedStore}
         onOpenDispatcher={() => setIsDispatcherOpen(true)}
       />
 
+      {/* Multi-Category Quick Filter Chips */}
+      <CategoryChips
+        activeCategory={searchQuery}
+        onSelectCategory={handleSearchChange}
+      />
+
       {/* Hero */}
       {!searchQuery && !selectedStore && <HeroBanner />}
+
+      {/* Personalized Recommendations based on recent search intent (e.g., Running) */}
+      {!searchQuery && !selectedStore && recentIntent && (
+        <PersonalizedFeed
+          intent={recentIntent}
+          onOpenHistory={(deal) => setActiveHistoryDeal(deal)}
+          onOpenAlert={(deal) => setActiveAlertDeal(deal)}
+          onDismiss={clearIntent}
+        />
+      )}
 
       {/* Explorer */}
       <DealsExplorer

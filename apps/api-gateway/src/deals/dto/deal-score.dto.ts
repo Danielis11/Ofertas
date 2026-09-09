@@ -1,4 +1,4 @@
-﻿import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import { DealGrade } from '../interfaces/deal-score.interface';
 import { Offer } from '../../offers/entities/offer.entity';
 
@@ -16,6 +16,26 @@ export class DealScoreFactorsDto {
   crossStoreAdvantage!: number;
 }
 
+export class CompetingStoreDto {
+  @ApiProperty({ example: 'Amazon México' })
+  storeName!: string;
+
+  @ApiProperty({ example: 'amazon-mx' })
+  storeSlug!: string;
+
+  @ApiProperty({ example: 15840.34 })
+  price!: number;
+
+  @ApiProperty({ example: 'https://...' })
+  url!: string;
+
+  @ApiProperty({ example: true, required: false })
+  isOfficialStore?: boolean;
+
+  @ApiProperty({ example: 'Tienda Oficial Xiaomi en Amazon', required: false })
+  sellerName?: string;
+}
+
 export class DealScoreDto {
   @ApiProperty({ example: 88, description: 'Deal score from 0 to 100' })
   score!: number;
@@ -31,4 +51,7 @@ export class DealScoreDto {
 
   @ApiProperty({ description: 'The analyzed offer details' })
   offer!: Partial<Offer>;
+
+  @ApiProperty({ type: [CompetingStoreDto], description: 'Other stores selling this exact same product', required: false })
+  otherStores?: CompetingStoreDto[];
 }

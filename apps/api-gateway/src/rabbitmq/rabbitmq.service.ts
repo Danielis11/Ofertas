@@ -58,26 +58,64 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     return !!this.connection && !!this.channel;
   }
 
+  private isReconnecting = false;
+
   private async connect(): Promise<void> {
     const host = this.configService.get<string>('RABBITMQ_HOST', 'localhost');
     const port = this.configService.get<number>('RABBITMQ_PORT', 5672);
     const user = this.configService.get<string>('RABBITMQ_DEFAULT_USER', 'dealhunter_admin');
     const pass = this.configService.get<string>('RABBITMQ_DEFAULT_PASS', 'dealhunter_admin_pass');
 
-    const url = `amqp://${user}:${pass}@${host}:${port}`;
+    const url = `amqp://${user}:${pass}@${host}:${port}?heartbeat=60`;
 
     try {
       this.connection = await amqp.connect(url);
+
+      // Handle connection error & close events to prevent process crashes on heartbeat timeout
+      this.connection.on('error', (err: any) => {
+        this.logger.warn(`RabbitMQ connection error: ${err.message}. Triggering reconnect...`);
+        this.scheduleReconnect();
+      });
+
+      this.connection.on('close', (reason: any) => {
+        this.logger.warn(`RabbitMQ connection closed: ${reason || 'unknown'}. Triggering reconnect...`);
+        this.scheduleReconnect();
+      });
+
       this.channel = await this.connection.createChannel();
+
+      this.channel.on('error', (err: any) => {
+        this.logger.warn(`RabbitMQ channel error: ${err.message}`);
+      });
 
       await this.channel.assertExchange(RABBITMQ_EXCHANGES.EVENTS, 'topic', {
         durable: true,
       });
 
       this.logger.log(`Connected to RabbitMQ on ${host}:${port} with exchange '${RABBITMQ_EXCHANGES.EVENTS}'`);
+      this.isReconnecting = false;
     } catch (err: any) {
-      this.logger.warn(`Could not connect to RabbitMQ broker: ${err.message}. Event messaging disabled.`);
+      this.logger.warn(`Could not connect to RabbitMQ broker: ${err.message}. Retrying in 5s...`);
+      this.scheduleReconnect();
     }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.isReconnecting) return;
+    this.isReconnecting = true;
+    this.connection = null;
+    this.channel = null;
+
+    setTimeout(async () => {
+      this.logger.log('Attempting to reconnect to RabbitMQ broker...');
+      await this.connect();
+      if (this.isConnected()) {
+        await this.setupConsumer();
+      } else {
+        this.isReconnecting = false;
+        this.scheduleReconnect();
+      }
+    }, 5000);
   }
 
   async publishEvent<T>(routingKey: string, event: BaseEvent<T>): Promise<boolean> {
@@ -114,6 +152,8 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
         'scraper.offer.*',
       );
 
+      await this.channel.prefetch(10);
+
       this.channel.consume(
         RABBITMQ_QUEUES.SCRAPER_OFFERS,
         async (msg: any) => {
@@ -140,14 +180,23 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
 
   private async handleOfferScraped(event: BaseEvent<OfferScrapedPayload>): Promise<void> {
     const payload = event.payload;
-    this.logger.log(`Processing OFFER_SCRAPED event: ${payload.title} from [${payload.storeSlug}]`);
+    const storeSlug = payload.storeSlug || (payload as any).store_slug;
+    const externalId = String(payload.externalId || (payload as any).external_id || '').trim();
+    const imageUrl = payload.imageUrl || (payload as any).image_url;
+
+    if (!storeSlug || !externalId) {
+      this.logger.warn(`Invalid OFFER_SCRAPED event: storeSlug="${storeSlug}", externalId="${externalId}". Skipping.`);
+      return;
+    }
+
+    this.logger.log(`Processing OFFER_SCRAPED event: ${payload.title} from [${storeSlug}] (ext: ${externalId})`);
 
     // 1. Resolve store
     let store;
     try {
-      store = await this.storesService.findBySlug(payload.storeSlug);
+      store = await this.storesService.findBySlug(storeSlug);
     } catch {
-      this.logger.warn(`Store '${payload.storeSlug}' not found in database. Skipping.`);
+      this.logger.warn(`Store '${storeSlug}' not found in database. Skipping.`);
       return;
     }
 
@@ -164,10 +213,15 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     }
 
     // If still not found, search by title
-    if (!product) {
+    if (!product && payload.title) {
       const searchRes = await this.productsService.findAll({ search: payload.title, limit: 1, page: 1 });
       if (searchRes.data.length > 0) {
-        product = searchRes.data[0];
+        // Only match if normalized names are an exact match
+        const normTitle = payload.title.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        const found = searchRes.data.find(p => p.normalizedName === normTitle);
+        if (found) {
+          product = found;
+        }
       }
     }
 
@@ -177,7 +231,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
         name: payload.title,
         brand: payload.brand || 'Desconocida',
         model: payload.model,
-        image: payload.imageUrl,
+        image: imageUrl,
         identifiers: payload.identifiers
           ? Object.entries(payload.identifiers).map(([k, v]) => ({
               type: (k.toUpperCase() as IdentifierType),
@@ -190,14 +244,14 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
 
     // 3. Check previous offer price for PRICE_CHANGED detection
     const existingOffers = await this.offersService.findByProductId(product.id);
-    const existing = existingOffers.find((o) => o.storeId === store.id && o.externalId === payload.externalId);
+    const existing = existingOffers.find((o) => o.storeId === store.id && o.externalId === externalId);
     const oldPrice = existing ? Number(existing.price) : null;
 
     // 4. Upsert Offer in PostgreSQL
     const savedOffer = await this.offersService.upsertOffer({
       productId: product.id,
       storeId: store.id,
-      externalId: payload.externalId,
+      externalId: externalId,
       url: payload.url,
       price: payload.price,
       currency: payload.currency || 'MXN',

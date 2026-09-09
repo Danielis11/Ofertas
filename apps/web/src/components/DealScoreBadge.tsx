@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Sparkles, TrendingDown, Award } from 'lucide-react';
 import { DealScore } from '../lib/api';
 
@@ -14,33 +14,28 @@ export const DealScoreBadge: React.FC<Props> = ({ deal, size = 'md' }) => {
     switch (grade) {
       case 'SUPER_DEAL':
         return {
-          bg: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30',
-          badge: 'bg-emerald-600 text-white',
-          circle: '#059669',
+          textColor: 'text-emerald-700',
+          label: 'Super Deal',
         };
       case 'GREAT_DEAL':
         return {
-          bg: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
-          badge: 'bg-blue-600 text-white',
-          circle: '#2563eb',
+          textColor: 'text-blue-700',
+          label: 'Gran Oferta',
         };
       case 'GOOD_DEAL':
         return {
-          bg: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
-          badge: 'bg-amber-600 text-white',
-          circle: '#d97706',
+          textColor: 'text-amber-700',
+          label: 'Buena Oferta',
         };
       case 'FAIR':
         return {
-          bg: 'bg-slate-500/10 text-slate-600 border-slate-500/30',
-          badge: 'bg-slate-600 text-white',
-          circle: '#475569',
+          textColor: 'text-slate-600',
+          label: 'Precio Regular',
         };
       default:
         return {
-          bg: 'bg-rose-500/10 text-rose-600 border-rose-500/30',
-          badge: 'bg-rose-600 text-white',
-          circle: '#e11d48',
+          textColor: 'text-rose-700',
+          label: 'Precio Alto',
         };
     }
   };
@@ -49,13 +44,12 @@ export const DealScoreBadge: React.FC<Props> = ({ deal, size = 'md' }) => {
 
   return (
     <div className="flex items-center gap-2 group relative">
-      <div
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-semibold text-xs transition-all shadow-sm ${colors.bg}`}
-      >
-        <Award className="w-3.5 h-3.5" />
-        <span>Score {score}/100</span>
-        <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${colors.badge}`}>
-          {grade.replace('_', ' ')}
+      <div className={`flex items-center gap-1.5 text-xs font-semibold ${colors.textColor}`}>
+        <Award className="w-3.5 h-3.5 shrink-0" />
+        <span>Score {score}</span>
+        <span className="text-slate-300 font-normal">·</span>
+        <span className="text-[11px] font-bold uppercase tracking-wide">
+          {colors.label}
         </span>
       </div>
 
@@ -76,7 +70,7 @@ export const DealScoreBadge: React.FC<Props> = ({ deal, size = 'md' }) => {
           </div>
           {factors.isHistoricalLowest && (
             <div className="text-amber-400 font-semibold flex items-center gap-1 mt-1">
-              <Sparkles className="w-3 h-3" /> ¡Mínimo Histórico Absoluto!
+              <Sparkles className="w-3 h-3" /> Mínimo histórico verificado
             </div>
           )}
           {factors.crossStoreAdvantage > 0 && (

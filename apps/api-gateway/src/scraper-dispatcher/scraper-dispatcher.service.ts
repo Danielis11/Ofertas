@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
@@ -11,6 +11,7 @@ import {
 import { RabbitMQService } from '../rabbitmq/rabbitmq.service';
 import { StoresService } from '../stores/stores.service';
 import { RedisService } from '../redis/redis.service';
+import { OffersService } from '../offers/offers.service';
 import { DispatchTaskDto, ScrapePriority } from './dto/dispatch-task.dto';
 import { JobSummaryDto, SchedulerStatusDto, ScheduleInfo } from './dto/job-status.dto';
 
@@ -23,19 +24,49 @@ export class ScraperDispatcherService {
       name: 'Amazon Mexico Hourly Deals',
       cron: '0 * * * *',
       targetStore: 'amazon-mx',
-      description: 'Crawls top electronics deals and discounted items from Amazon Mexico every hour',
+      description: 'Crawls top electronics deals and lightning sales from Amazon Mexico every hour',
     },
     {
       name: 'Mercado Libre Electronics Crawl',
       cron: '15 * * * *',
       targetStore: 'mercado-libre-mx',
-      description: 'Crawls top trending smartphones and computers every hour from Mercado Libre',
+      description: 'Crawls top trending smartphones and lightning discounts every hour from Mercado Libre',
     },
     {
-      name: 'Walmart Mexico Tech Refresh',
+      name: 'Mercado Libre Official Brand Stores (Kitchen & Home)',
+      cron: '20 * * * *',
+      targetStore: 'mercado-libre-mx',
+      description: 'Crawls verified official brand stores in Mercado Libre (Oster, Whirlpool, Ninja) for authentic discounts',
+    },
+    {
+      name: 'Mercado Libre Official Brand Stores (Computing & Monitors)',
+      cron: '25 * * * *',
+      targetStore: 'mercado-libre-mx',
+      description: 'Crawls verified official brand stores in Mercado Libre (ASUS ROG/TUF, LG Electronics, Dell) for monitor & laptop deals',
+    },
+    {
+      name: 'Amazon Official Brand Stores (Tech, Audio & Gaming)',
       cron: '30 * * * *',
-      targetStore: 'walmart-mx',
-      description: 'Crawls tech and gaming rollback deals from Walmart Mexico every hour',
+      targetStore: 'amazon-mx',
+      description: 'Crawls official brand storefronts on Amazon (Sony, Bose, Apple, Samsung, Nintendo) for certified warranty deals',
+    },
+    {
+      name: 'Samsung Mexico Official Promotions',
+      cron: '35 * * * *',
+      targetStore: 'samsung-mx',
+      description: 'Crawls official Samsung Galaxy smartphone, tablet, and audio promotions',
+    },
+    {
+      name: 'Steam Specials & Gaming Deals',
+      cron: '45 * * * *',
+      targetStore: 'steam-mx',
+      description: 'Crawls top PC game discounts and weekend specials from Steam',
+    },
+    {
+      name: 'Daily Stale Offers Cleanup',
+      cron: '0 2 * * *',
+      targetStore: 'dealhunter-system',
+      description: 'Automatically flags offers older than 48 hours without update as unavailable',
     },
   ];
 
@@ -44,7 +75,24 @@ export class ScraperDispatcherService {
     private readonly storesService: StoresService,
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
+    private readonly offersService: OffersService,
   ) {}
+
+  /**
+   * Automated daily cleanup of stale/expired offers older than 48 hours.
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_2AM)
+  async handleStaleOffersCleanup(): Promise<void> {
+    this.logger.log('🧹 Starting automated daily cleanup of stale/expired offers...');
+    try {
+      const result = await this.offersService.cleanStaleOffers(48);
+      this.logger.log(`🧹 Stale offers cleanup complete: ${result.markedUnavailable} offers marked as unavailable (cutoff: ${result.cutoff.toISOString()}).`);
+      await this.redisService.set('scraper:stale_cleaned:last_run', new Date().toISOString());
+      await this.redisService.set('scraper:stale_cleaned:last_count', result.markedUnavailable);
+    } catch (err: any) {
+      this.logger.error(`Error cleaning stale offers: ${err.message}`);
+    }
+  }
 
   /**
    * Automated hourly cron job to scrape top stores and discover new deals.
@@ -75,9 +123,37 @@ export class ScraperDispatcherService {
         maxItems: 30,
       },
       {
-        storeSlug: 'walmart-mx',
-        searchQuery: 'liquidaciones',
-        category: 'tecnologia',
+        storeSlug: 'mercado-libre-mx',
+        searchQuery: 'tienda oficial oster licuadoras',
+        category: 'electrodomesticos',
+        priority: ScrapePriority.NORMAL,
+        maxItems: 30,
+      },
+      {
+        storeSlug: 'mercado-libre-mx',
+        searchQuery: 'tienda oficial asus monitores tuf',
+        category: 'computacion',
+        priority: ScrapePriority.NORMAL,
+        maxItems: 30,
+      },
+      {
+        storeSlug: 'amazon-mx',
+        searchQuery: 'tienda oficial samsung galaxy',
+        category: 'celulares-y-telefonia',
+        priority: ScrapePriority.NORMAL,
+        maxItems: 30,
+      },
+      {
+        storeSlug: 'samsung-mx',
+        searchQuery: 'promociones',
+        category: 'celulares-y-telefonia',
+        priority: ScrapePriority.NORMAL,
+        maxItems: 30,
+      },
+      {
+        storeSlug: 'steam-mx',
+        searchQuery: 'ofertas especiales',
+        category: 'consolas-y-videojuegos',
         priority: ScrapePriority.NORMAL,
         maxItems: 30,
       },

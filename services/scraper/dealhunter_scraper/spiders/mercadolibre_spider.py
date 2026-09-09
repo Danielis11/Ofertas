@@ -12,19 +12,23 @@ class MercadoLibreSpider(scrapy.Spider):
         'CONCURRENT_REQUESTS_PER_DOMAIN': 2,
     }
 
-    def __init__(self, query: str = "samsung-galaxy-s23", *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.query = query
+        self.query = kwargs.get('query', 'samsung-galaxy-s23')
         self.extractor = MercadoLibreExtractor()
+        
+        slug = self.query.strip().replace(' ', '-')
+        self.start_urls = [f"https://listado.mercadolibre.com.mx/{slug}"]
 
     def start_requests(self):
+        self.logger.info(f"🚀 start_requests called with query: {self.query}")
         slug = self.query.strip().replace(' ', '-')
         url = f"https://listado.mercadolibre.com.mx/{slug}"
         yield scrapy.Request(
             url=url,
             callback=self.parse,
             dont_filter=True,
-
+            meta={"playwright": True},
             headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 'Accept-Language': 'es-MX,es;q=0.9',

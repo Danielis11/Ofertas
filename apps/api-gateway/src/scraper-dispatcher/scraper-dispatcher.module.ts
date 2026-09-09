@@ -1,8 +1,9 @@
-﻿import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { RabbitMQModule } from '../rabbitmq/rabbitmq.module';
 import { StoresModule } from '../stores/stores.module';
 import { RedisModule } from '../redis/redis.module';
+import { OffersModule } from '../offers/offers.module';
 import { ScraperDispatcherService } from './scraper-dispatcher.service';
 import { ScraperDispatcherController } from './scraper-dispatcher.controller';
 
@@ -12,6 +13,7 @@ import { ScraperDispatcherController } from './scraper-dispatcher.controller';
     RabbitMQModule,
     StoresModule,
     RedisModule,
+    OffersModule,
   ],
   controllers: [ScraperDispatcherController],
   providers: [ScraperDispatcherService],

@@ -14,6 +14,7 @@ export interface Store {
   domain: string;
   logo?: string;
   status: string;
+  offerCount?: number;
 }
 
 export interface Product {
@@ -38,6 +39,8 @@ export interface Offer {
   availability: boolean;
   lastSeen: string;
   updatedAt: string;
+  sellerName?: string;
+  isOfficialStore?: boolean;
   product?: Product;
   store?: Store;
 }
@@ -48,6 +51,14 @@ export interface DealScore {
   savingsPercentage: number;
   factors: DealFactor;
   offer: Offer;
+  otherStores?: {
+    storeName: string;
+    storeSlug: string;
+    price: number;
+    url: string;
+    isOfficialStore?: boolean;
+    sellerName?: string;
+  }[];
 }
 
 export interface SearchFacets {
@@ -191,6 +202,18 @@ export const api = {
     }
   },
 
+  async getStores(): Promise<Store[]> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/stores`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) return [];
+      return res.json();
+    } catch {
+      return [];
+    }
+  },
+
 
   // Alerts
   async createAlert(token: string, data: { productId: string; targetPrice: number; notifyChannels?: string[] }) {
@@ -222,5 +245,27 @@ export const api = {
     if (!res.ok) throw new Error('Failed to dispatch scraper');
     return res.json();
   },
+
+  // Recommendations by user search intent
+  async getRecommendations(intent?: string, brand?: string): Promise<RecommendationResponse | null> {
+    try {
+      const params = new URLSearchParams();
+      if (intent) params.set('intent', intent);
+      if (brand) params.set('brand', brand);
+      const res = await fetch(`${API_BASE_URL}/search/recommendations?${params.toString()}`, { cache: 'no-store' });
+      if (!res.ok) return null;
+      return res.json();
+    } catch {
+      return null;
+    }
+  },
 };
+
+export interface RecommendationResponse {
+  intent: string;
+  title: string;
+  subtitle: string;
+  brand?: string;
+  deals: DealScore[];
+}
 
